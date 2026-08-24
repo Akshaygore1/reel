@@ -1,73 +1,74 @@
-# System Design Reels — Blueprint Video Engine (100% Python)
+# Blueprint Reel Harness
 
-High-performance video generation engine for 9:16 vertical system-design reels with dark warm-slate blueprint graphics, procedural game SFX, ambient lo-fi synth, zero voiceover, and social captions.
+A local, cross-platform Python harness for 9:16 system-design reels. Pillow renders
+the caption-free blueprint visuals, NumPy synthesizes scene-synchronized zero-voiceover
+game SFX and ambient music,
+and FFmpeg compiles verified H.264/AAC videos.
 
----
+## Setup
 
-## ⚡ Quickstart — Generate Videos with a Single Prompt
-
-### 1. Generate a Concept-Driven Video (up to 30s)
-Generate a full 9:16 vertical video, synchronized procedural audio, and caption with a single prompt. Reels default to 10 seconds; use `--duration` when the explanation needs more room:
 ```bash
-python3 generate.py --prompt "Database Sharding vs Partitioning"
-python3 generate.py --prompt "Model Context Protocol" --duration 18
+python3 -m venv .venv
+# Activate it: source .venv/bin/activate (macOS/Linux)
+#          or: .venv\Scripts\activate (Windows)
+python -m pip install --upgrade pip
+python -m pip install -e '.[test]'
+python -m reel doctor
 ```
 
-`--duration` accepts any positive duration and safely caps it at 30 seconds.
+FFmpeg and FFprobe must be installed on `PATH`.
 
-### 2. Generate Built-in Core Flagship Reels
-List the 4 core presets:
+## New bespoke run
+
 ```bash
-python3 generate.py --list
-```
-Build a specific reel preset in ~2.5 seconds:
-```bash
-python3 generate.py --preset sql_injection
-python3 generate.py --preset redis_vs_db
-python3 generate.py --preset autoscaling
-python3 generate.py --preset cron_jobs
-```
-Or build all 4 core reels:
-```bash
-python3 generate.py --preset all
+python3 -m reel scaffold "Consistent Hashing" --json
+# edit .work/<run-id>/scene.py
+python3 -m reel probe <run-id>
+python3 -m reel render <run-id>
 ```
 
-### 3. Clean Workspace
-```bash
-python3 generate.py --clean
+Every new reel must be 15–30 seconds. Choose 15 seconds for a simple mechanism,
+20 for a standard three-beat explanation (the fallback), 25 for a multi-stage
+comparison, and 30 for a dense protocol. Each `SCENE` must also declare an `audio`
+cue sheet with at least one normalized cue in every narrative beat:
+
+```python
+SCENE["audio"] = {
+    "profile": "network",  # network|mechanical|storage|security|compute|protocol
+    "tempo_bpm": 100,      # optional; the profile default is used when omitted
+    "events": [
+        {"at": 0.12, "kind": "packet", "intensity": 0.6},
+        {"at": 0.34, "kind": "alarm", "intensity": 0.8},
+        {"at": 0.64, "kind": "success", "intensity": 0.7},
+    ],
+}
 ```
 
----
+Cue kinds are `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
+`processing`, `impact`, and `success`; intensity defaults to `0.5`. Invalid or
+incomplete plans fail before frames render. Frames contain no posting-caption text,
+while every output kit still includes a populated `caption.txt`.
 
-## 📁 Clean Repository Structure
+Successful runs are immutable kits under `output/<run-id>/` containing `video.mp4`,
+`caption.txt`, `manifest.json`, `poster.jpg`, `brief.json`, and `scene.py`. Heavy
+frames and WAVs live under ignored `.work/` and are removed after successful renders.
 
-```
-reels/
-├── THEME_SPEC.md             # Visual design system & animation specification
-├── README.md                 # Single-prompt generation guide & documentation
-├── generate.py               # Pure Python Master CLI (single-prompt & preset generator)
-│
-├── engine/                   # Core video & audio synthesis engine
-│   ├── blueprint_engine.py   # Base 9:16 rendering primitives & layout tokens
-│   ├── pro_audio.py          # Neural TTS voiceover & warm ambient music synthesizer
-│   └── generators/           # Modular visual generators
-│       ├── sql_injection.py  # 1. SQL Injection (3D Server Racks & Breach Alarm)
-│       ├── redis_vs_db.py    # 2. Redis vs DB (Silicon DRAM vs Magnetic Disk)
-│       ├── autoscaling.py    # 3. Autoscaling (Pachinko Drops & Crane Scaler)
-│       ├── cron_jobs.py      # 4. Cron Jobs (24-Hour Dial & 5 Sliding Gates)
-│       └── custom_blueprint.py # Dynamic generator for AI-generated scripts/prompts
-│
-├── fonts/                    # High-legibility typography (Inter, JetBrains Mono, DejaVu)
-├── audio/                    # 4 Core master audio tracks (.wav)
-└── output/                   # 4 Core finished MP4s + Instagram captions (.txt)
-    ├── video_sql_injection.mp4 / .txt
-    ├── video_redis_vs_db.mp4 / .txt
-    ├── video_autoscaling.mp4 / .txt
-    └── video_cron_jobs.mp4 / .txt
+## Commands
+
+```text
+python3 -m reel doctor
+python3 -m reel presets
+python3 -m reel scaffold "<topic>" [--duration N] [--resolution 720p|1080p|2160p] --json
+python3 -m reel probe <run-id>
+python3 -m reel render <run-id> [--keep-work]
+python3 -m reel runs [--json]
+python3 -m reel inspect <run-id> [--json]
+python3 -m reel delete <run-id> [--yes]
+python3 -m reel clean
+python3 -m reel migrate-legacy
+python3 -m reel promote <run-id> [--yes]
 ```
 
----
-
-## 🎨 Theme & Style Specification
-
-The exact visual tokens, canvas layout, audio mixing, and 3-beat storytelling rules are logged in **[`THEME_SPEC.md`](file:///Users/akshay/Desktop/reels/THEME_SPEC.md)**.
+`generate.py` remains a compatibility wrapper for legacy presets and flags. Open
+`gallery.html` directly; it reads ignored `output/catalog.js` and never rewrites
+tracked HTML.

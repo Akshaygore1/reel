@@ -12,24 +12,19 @@ Usage:
   python3 generate.py --clean                # Clean temporary caches and frame folders
 """
 import os, sys, time, shutil, argparse, subprocess, re
-from engine.sfx_audio import build_game_soundtrack
 from engine.build_gallery import build_gallery_html
+from reel.rendering import create_run, render_legacy_preset, render_run
+from reel.runs import (DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, clean_work,
+                       validate_duration)
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "output")
 AUDIO_DIR = os.path.join(WORKSPACE_DIR, "audio")
 TMP_FRAMES_DIR = os.path.join(WORKSPACE_DIR, ".tmp_frames")
 FPS = 30
-DEFAULT_DURATION = 10.0
-MAX_DURATION = 30.0
-
-
 def normalize_duration(duration):
-    """Return a safe reel duration while enforcing the global 30-second cap."""
-    value = DEFAULT_DURATION if duration is None else float(duration)
-    if value <= 0:
-        raise ValueError("Duration must be greater than 0 seconds")
-    return min(value, MAX_DURATION)
+    """Apply the shared 15–30 second reel policy without silently clamping."""
+    return validate_duration(duration)
 
 PRESETS = {
     "ci_cd": {
@@ -38,7 +33,7 @@ PRESETS = {
         "script": "engine/generators/ci_cd.py",
         "audio": "audio/ci_cd.wav",
         "output_video": "video_ci_cd.mp4",
-        "duration": 10.0,
+        "duration": 20.0,
         "caption": """CI/CD explained: why shipping code manually at 2 AM is high-risk roulette.
 
 In modern engineering, you don't SSH into production servers to pull code or restart containers manually.
@@ -554,6 +549,38 @@ Follow @buildebugship for programming concepts explained visually.
     }
 }
 
+# Flagship scripts predate SceneV2, so their synchronized plans live beside the
+# registry entry. Each cue corresponds to an apparatus action visible in its beat.
+PRESET_AUDIO_PLANS = {
+    "ci_cd": ("compute", ((.12, "processing", .55), (.35, "alarm", .80), (.66, "latch", .65), (.84, "success", .75))),
+    "mcp_explained": ("protocol", ((.10, "packet", .55), (.38, "latch", .70), (.64, "processing", .60), (.88, "success", .75))),
+    "sql_injection": ("security", ((.14, "tick", .45), (.34, "alarm", .90), (.68, "latch", .70), (.86, "success", .75))),
+    "database_failover": ("storage", ((.12, "packet", .50), (.36, "alarm", .85), (.65, "latch", .80), (.84, "success", .70))),
+    "kafka_partitions": ("storage", ((.10, "queue", .55), (.38, "alarm", .75), (.64, "sweep", .65), (.82, "success", .70))),
+    "redis_pubsub_vs_kafka": ("storage", ((.12, "packet", .55), (.37, "queue", .80), (.65, "latch", .65), (.86, "success", .70))),
+    "redis_vs_db": ("storage", ((.11, "tick", .50), (.36, "queue", .75), (.66, "sweep", .65), (.84, "success", .70))),
+    "autoscaling": ("mechanical", ((.12, "packet", .50), (.35, "alarm", .85), (.64, "latch", .75), (.83, "success", .70))),
+    "cron_jobs": ("mechanical", ((.14, "tick", .60), (.37, "queue", .65), (.64, "latch", .85), (.82, "success", .65))),
+    "vpn_tunnel": ("security", ((.10, "packet", .55), (.36, "alarm", .75), (.64, "sweep", .70), (.86, "success", .65))),
+    "cold_starts": ("compute", ((.12, "packet", .50), (.35, "processing", .85), (.65, "impact", .65), (.84, "success", .70))),
+    "database_indexing": ("storage", ((.10, "queue", .50), (.36, "alarm", .75), (.64, "sweep", .70), (.83, "success", .75))),
+    "streaming_vs_direct": ("network", ((.12, "packet", .55), (.36, "queue", .80), (.63, "packet", .70), (.85, "success", .65))),
+    "websockets_vs_polling": ("network", ((.10, "packet", .50), (.37, "queue", .85), (.64, "latch", .65), (.84, "success", .70))),
+    "sql_vs_nosql": ("storage", ((.12, "processing", .50), (.35, "queue", .85), (.66, "sweep", .70), (.85, "success", .70))),
+    "chatgpt_streaming": ("compute", ((.11, "processing", .55), (.36, "impact", .80), (.64, "packet", .70), (.86, "success", .65))),
+    "cdn_edge": ("network", ((.10, "packet", .55), (.36, "queue", .80), (.64, "sweep", .70), (.84, "success", .70))),
+    "authn_vs_authz": ("security", ((.12, "latch", .50), (.35, "alarm", .85), (.65, "latch", .75), (.84, "success", .70))),
+    "react_under_hood": ("compute", ((.11, "processing", .55), (.37, "queue", .80), (.64, "sweep", .65), (.85, "success", .70))),
+    "captcha_explained": ("security", ((.12, "tick", .50), (.36, "alarm", .80), (.66, "latch", .70), (.84, "success", .70))),
+    "garbage_collection": ("compute", ((.10, "processing", .50), (.37, "queue", .80), (.64, "sweep", .75), (.84, "impact", .60))),
+    "garbage_collection_simple": ("compute", ((.12, "blip", .50), (.36, "queue", .75), (.64, "sweep", .75), (.85, "success", .65))),
+}
+for _key, (_profile, _events) in PRESET_AUDIO_PLANS.items():
+    PRESETS[_key]["audio_plan"] = {
+        "profile": _profile,
+        "events": [{"at": at, "kind": kind, "intensity": intensity} for at, kind, intensity in _events],
+    }
+
 def render_frames_with_script(script_path, temp_dir):
     """Executes generator script directly to produce frames into temp_dir"""
     os.makedirs(temp_dir, exist_ok=True)
@@ -608,57 +635,19 @@ def compile_video(frames_dir, audio_path, output_mp4, duration=DEFAULT_DURATION,
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def build_preset(preset_key, hd=False, force_audio=True, uhd=False, duration=None):
-    """Builds a single core preset with remastered audio, frames, and video"""
+    """Compatibility adapter: render an existing preset into a unique run kit."""
     if preset_key not in PRESETS:
         print(f"❌ Preset '{preset_key}' not found. Run with --list to see options.")
         return False
 
     preset = PRESETS[preset_key]
-    duration = normalize_duration(duration if duration is not None else preset.get("duration"))
-    start_time = time.time()
-    res_str = "2160x3840 Ultra HD" if uhd else ("1080x1920 HD" if hd else "720x1280")
-    print(f"\n==================================================")
-    print(f"🎬 Generating Flagship Reel: {preset['title']} [{res_str} · {duration:g}s]")
-    print(f"==================================================")
-
-    # 1. Synthesize Remastered Crystal-Clear Audio (Zero Voiceover)
-    audio_path = os.path.join(WORKSPACE_DIR, preset["audio"])
-    if force_audio or not os.path.exists(audio_path):
-        theme = preset.get("audio_theme", "default")
-        if theme == "mcp_protocol":
-            print("🎮 Synthesizing apparatus audio (adapter scrapes, connector latches, packet toots, discovery scan, result resolve)...")
-        else:
-            print(f"🎮 Synthesizing procedural apparatus SFX + ambient score ({theme})...")
-        build_game_soundtrack(audio_path, duration=duration, beat1_end=duration * 0.30,
-                              beat2_end=duration * 0.60, boom_time=duration * 0.80,
-                              theme=theme)
-
-    # 2. Render Frames to temporary directory
-    temp_dir = os.path.join(TMP_FRAMES_DIR, preset["id"])
-    print(f"📐 Rendering frames (720x1280 @ {FPS}fps) with multiprocessing...")
-    render_frames_with_script(preset["script"], temp_dir)
-
-    # 3. Write Caption Text File
-    output_mp4 = os.path.join(OUTPUT_DIR, preset["output_video"])
-    if uhd:
-        output_mp4 = output_mp4.replace(".mp4", "_uhd.mp4")
-    output_txt = output_mp4.replace(".mp4", ".txt")
-    with open(output_txt, "w", encoding="utf-8") as f:
-        f.write(preset["caption"])
-
-    # 4. Compile with FFmpeg
-    print(f"🎞️ Compiling video and audio into MP4 ({res_str})...")
-    compile_video(temp_dir, audio_path, output_mp4, duration=duration, hd=hd, uhd=uhd)
-
-    # 5. Clean up temp frames to keep workspace tidy
-    shutil.rmtree(temp_dir, ignore_errors=True)
-
-    elapsed = time.time() - start_time
-    size_mb = os.path.getsize(output_mp4) / (1024 * 1024)
-    print(f"✅ Generated: {output_mp4} ({size_mb:.2f} MB in {elapsed:.1f}s)")
-    print(f"📝 Caption:   {output_txt}")
+    resolution = "2160p" if uhd else ("1080p" if hd else "720p")
+    selected_duration = normalize_duration(duration if duration is not None else preset.get("duration"))
+    print(f"🎬 Generating {preset['title']} as a unique {resolution} run...")
+    destination = render_legacy_preset(preset_key, preset, selected_duration, resolution)
     build_gallery_html()
-    return True
+    print(f"✅ Run kit: {destination}")
+    return destination
 
 def generate_from_prompt(prompt_text, hd=False, uhd=False, duration=None):
     """
@@ -674,16 +663,16 @@ def generate_from_prompt(prompt_text, hd=False, uhd=False, duration=None):
         return build_preset("mcp_explained", hd=hd, uhd=uhd, duration=duration)
     if "auto" in clean_p and "scal" in clean_p:
         print(f"🎯 Matched flagship reel: Autoscaling")
-        return build_preset("autoscaling", hd=hd, duration=duration)
+        return build_preset("autoscaling", hd=hd, uhd=uhd, duration=duration)
     if "kafka" in clean_p and ("redis" in clean_p or "pub/sub" in clean_p or "pubsub" in clean_p or ("pub" in clean_p and "sub" in clean_p)):
         print(f"🎯 Matched flagship reel: Redis Pub/Sub vs Kafka")
         return build_preset("redis_pubsub_vs_kafka", hd=hd, uhd=uhd, duration=duration)
     if "redis" in clean_p or "ram vs" in clean_p or "in memory" in clean_p:
         print(f"🎯 Matched flagship reel: Redis vs Database Disk")
-        return build_preset("redis_vs_db", hd=hd, duration=duration)
+        return build_preset("redis_vs_db", hd=hd, uhd=uhd, duration=duration)
     if "sql" in clean_p and "inject" in clean_p:
         print(f"🎯 Matched flagship reel: SQL Injection")
-        return build_preset("sql_injection", hd=hd, duration=duration)
+        return build_preset("sql_injection", hd=hd, uhd=uhd, duration=duration)
     if "failover" in clean_p or ("primary" in clean_p and ("replica" in clean_p or "database" in clean_p)):
         print(f"🎯 Matched flagship reel: Database Failover")
         return build_preset("database_failover", hd=hd, uhd=uhd, duration=duration)
@@ -695,22 +684,22 @@ def generate_from_prompt(prompt_text, hd=False, uhd=False, duration=None):
         return build_preset("websockets_vs_polling", hd=hd, uhd=uhd, duration=duration)
     if "index" in clean_p:
         print(f"🎯 Matched flagship reel: Database Indexing")
-        return build_preset("database_indexing", hd=hd, duration=duration)
+        return build_preset("database_indexing", hd=hd, uhd=uhd, duration=duration)
     if "cron" in clean_p:
         print(f"🎯 Matched flagship reel: Cron Jobs")
-        return build_preset("cron_jobs", hd=hd, duration=duration)
+        return build_preset("cron_jobs", hd=hd, uhd=uhd, duration=duration)
     if "vpn" in clean_p or "tunnel" in clean_p or "wifi" in clean_p:
         print(f"🎯 Matched flagship reel: VPN Explained")
-        return build_preset("vpn_tunnel", hd=hd, duration=duration)
+        return build_preset("vpn_tunnel", hd=hd, uhd=uhd, duration=duration)
     if "cold" in clean_p or "serverless" in clean_p or "lambda" in clean_p:
         print(f"🎯 Matched flagship reel: Serverless Cold Starts")
-        return build_preset("cold_starts", hd=hd, duration=duration)
+        return build_preset("cold_starts", hd=hd, uhd=uhd, duration=duration)
     if "chatgpt" in clean_p or "gpt" in clean_p or "openai" in clean_p:
         print(f"🎯 Matched flagship reel: How ChatGPT Streams Responses")
-        return build_preset("chatgpt_streaming", hd=hd, duration=duration)
+        return build_preset("chatgpt_streaming", hd=hd, uhd=uhd, duration=duration)
     if "stream" in clean_p or "sse" in clean_p or "chunked" in clean_p or "direct" in clean_p:
         print(f"🎯 Matched flagship reel: Streaming Response vs Direct")
-        return build_preset("streaming_vs_direct", hd=hd, duration=duration)
+        return build_preset("streaming_vs_direct", hd=hd, uhd=uhd, duration=duration)
     if "cdn" in clean_p or "edge" in clean_p or "content delivery" in clean_p:
         print(f"🎯 Matched flagship reel: CDN Edge")
         return build_preset("cdn_edge", hd=hd, uhd=uhd, duration=duration)
@@ -730,100 +719,19 @@ def generate_from_prompt(prompt_text, hd=False, uhd=False, duration=None):
         print(f"🎯 Matched flagship reel: Garbage Collection — Simple")
         return build_preset("garbage_collection_simple", hd=hd, uhd=uhd, duration=duration)
 
-    # Otherwise generate custom blueprint reel
-    start_time = time.time()
-    safe_slug = re.sub(r'[^a-zA-Z0-9]+', '_', prompt_text.strip().lower())[:30].strip('_')
-    if not safe_slug: safe_slug = f"reel_{int(time.time())}"
-
-    res_str = "2160x3840 Ultra HD" if uhd else ("1080x1920 HD" if hd else "720x1280")
-    print(f"\n==================================================")
-    print(f"✨ Generating Bespoke Blueprint Reel: '{prompt_text}' [{res_str}]")
-    print(f"==================================================")
-
-    # Smart keyword extraction
-    words = prompt_text.replace(" vs ", " VS ").split(" VS ")
-    left_title = words[0].strip().upper() if len(words) > 1 else "TRADITIONAL"
-    right_title = words[1].strip().upper() if len(words) > 1 else "OPTIMIZED"
-
-    # 1. Synthesize Procedural Game Audio (10.0s, Zero Voiceover)
-    audio_path = os.path.join(AUDIO_DIR, f"game_{safe_slug}.wav")
-    duration = normalize_duration(duration)
-    total_frames = int(FPS * duration)
-    print(f"🎮 Synthesizing remastered crystal-clear game audio...")
-    build_game_soundtrack(audio_path, duration=duration, beat1_end=duration * 0.30,
-                          beat2_end=duration * 0.60, boom_time=duration * 0.80)
-
-    # Dynamic Blueprint Configuration
-    step_frames = total_frames / 5.0
-    config = {
-        "handle": "@buildebugship",
-        "title1": left_title[:12],
-        "title_vs": "vs",
-        "title2": right_title[:12],
-        "comp_left": left_title[:18],
-        "comp_right": right_title[:18],
-        "subhook": f"how {prompt_text.lower()} scales under peak production traffic",
-        "metric1_label": "LATENCY",
-        "metric1_val": "0.35ms",
-        "metric2_label": "THROUGHPUT",
-        "metric2_val": "150k req/s",
-        "node_left_name": f"{left_title[:16]}",
-        "node_right_name": f"{right_title[:16]}",
-        "captions": [
-            (0, f"peak production traffic hits {prompt_text} simultaneously."),
-            (int(step_frames), "legacy synchronous architecture creates a high-latency bottleneck."),
-            (int(step_frames * 2), "decoupling components allows instant horizontal scaling."),
-            (int(step_frames * 3), "distributed nodes process requests in sub-millisecond time."),
-            (int(step_frames * 4), "99.99% uptime with zero packet drops under peak load."),
-        ]
-    }
-
-    # 2. Render Frames
-    temp_dir = os.path.join(TMP_FRAMES_DIR, f"custom_{safe_slug}")
-    print(f"📐 Rendering {total_frames} blueprint frames...")
-    from engine.generators.custom_blueprint import render_custom_reel
-    render_custom_reel(config, temp_dir, total_frames=total_frames)
-
-    # 3. Write Output Files
-    output_mp4 = os.path.join(OUTPUT_DIR, f"video_{safe_slug}.mp4")
-    if uhd:
-        output_mp4 = output_mp4.replace(".mp4", "_uhd.mp4")
-    output_txt = output_mp4.replace(".mp4", ".txt")
-
-    caption = f"""{prompt_text} explained: how to scale backend architecture under peak load.
-
-When traffic surges 10x, synchronous bottlenecks can melt your primary database.
-
-Using {prompt_text} decouples processing layers and guarantees low latency and 99.99% uptime.
-
-How do you handle this architecture pattern in your tech stack?
-Follow @buildebugship for backend internals and system design explained visually.
-
-#systemdesign #backend #devops #cloud #softwareengineering"""
-
-    with open(output_txt, "w", encoding="utf-8") as f:
-        f.write(caption)
-
-    # 4. Compile Video
-    print(f"🎞️ Compiling video into MP4 ({res_str})...")
-    compile_video(temp_dir, audio_path, output_mp4, duration=duration, hd=hd, uhd=uhd)
-
-    # 5. Clean up temporary frames
-    shutil.rmtree(temp_dir, ignore_errors=True)
-
-    elapsed = time.time() - start_time
-    size_mb = os.path.getsize(output_mp4) / (1024 * 1024)
-    print(f"✅ Generated: {output_mp4} ({size_mb:.2f} MB in {elapsed:.1f}s)")
-    print(f"📝 Caption:   {output_txt}")
+    # --prompt is the explicitly requested quick path. It still uses the safe
+    # SceneV2/run-kit pipeline, but agents should scaffold and author bespoke scenes.
+    resolution = "2160p" if uhd else ("1080p" if hd else "720p")
+    brief = create_run(prompt_text, normalize_duration(duration), resolution, mode="quick")
+    print(f"✨ Quick SceneV2 run: {brief['run_id']}")
+    destination = render_run(brief["run_id"])
     build_gallery_html()
-    return output_mp4
+    return destination
 
 def clean_directory():
-    """Purges intermediate cache directories and temporary frame folders"""
-    print("🧹 Cleaning workspace...")
-    if os.path.exists(TMP_FRAMES_DIR):
-        shutil.rmtree(TMP_FRAMES_DIR, ignore_errors=True)
-    print(f"✨ Workspace is neat and tidy!")
+    """Purges ignored run workspaces; published runs are never pruned."""
+    count = clean_work()
+    print(f"✨ Removed {count} work directories; published runs were preserved.")
 
 def main():
     parser = argparse.ArgumentParser(description="Master System Design Reels Generator (100% Python)")
@@ -832,15 +740,15 @@ def main():
     parser.add_argument("--prompt", type=str, help="Generate a reel from any topic prompt")
     parser.add_argument("--hd", action="store_true", help="Render in 1080x1920 HD publication resolution")
     parser.add_argument("--uhd", action="store_true", help="Render in 2160x3840 Ultra HD publication resolution")
-    parser.add_argument("--duration", type=float, help="Reel duration in seconds (maximum 30; preset default otherwise)")
+    parser.add_argument("--duration", type=float, help=f"Reel duration in seconds ({MIN_DURATION:g}–{MAX_DURATION:g}; default {DEFAULT_DURATION:g})")
     parser.add_argument("--clean", action="store_true", help="Clean all temporary cache and frame folders")
     parser.add_argument("--serve", nargs="?", const=8000, type=int, help="Start the interactive video gallery server (default port 8000)")
 
     args = parser.parse_args()
 
     if args.serve:
-        from engine.server import run_server
-        run_server(args.serve)
+        from reel.cli import main as reel_main
+        reel_main(["serve", "--port", str(args.serve)])
         return
 
     if args.list:

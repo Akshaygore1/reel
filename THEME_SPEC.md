@@ -3,7 +3,7 @@
 ## 1. Canvas Dimensions & Video Specification
 - **Resolution**: `720 × 1280` (9:16 Vertical Video / Instagram Reels / YouTube Shorts / TikTok)
 - **Framerate**: `30 FPS`
-- **Total Duration**: concept-driven; `10.0 seconds` by default, capped at `30.0 seconds`
+- **Total Duration**: concept-driven, required range `15.0–30.0 seconds`; `20.0 seconds` by default
 - **Total Frames**: actual duration × 30fps
 - **Video Codec**: `H.264 (libx264)`, Pixel Format `yuv420p`, CRF `18`, Preset `fast`
 - **Audio Codec**: `AAC @ 192kbps`, 44.1kHz Mono
@@ -58,7 +58,7 @@ GREEN_D   = (6, 95, 70)      # Dark Green for Scaled Container Tubes
 │                                                         │
 │ ═══════════════════════════════════════════════════════ │
 │                                                         │
-│      ( 375x faster responses directly from RAM )        │  Y: 986 - 1024 (Caption Pill)
+│              CAPTION-FREE VISUAL BREATHING ROOM         │  Y: 986 - 1024
 │                                                         │
 │                                                         │  Y: 1040 - 1280 (Bottom safe zone)
 └─────────────────────────────────────────────────────────┘
@@ -66,13 +66,20 @@ GREEN_D   = (6, 95, 70)      # Dark Green for Scaled Container Tubes
 
 ---
 
-## 4. Remastered Sound Design Specification (Zero Voiceover)
+## 4. Scene-Synchronized Sound Design Specification (Zero Voiceover)
 
 - **Zero Voiceover / No TTS**: Pure procedural sound effects and music.
-- **UI Micro-Blips (Beat 1 & 3)**: Fast attack, 8-bit transients (980Hz – 1320Hz).
-- **Game-Over / Alert Buzzer (Beat 2 @ 30%)**: Descending saw (270Hz → 85Hz) with 22Hz tremolo.
-- **Ting-Tong Victory Chime (Beat 3 @ 60%)**: Dual bell chime (E5 659.25Hz → B5 987.77Hz) with harmonic ring decay.
-- **Ambient Synth Bed**: Fmaj7 → G → Am7 → Em7 lo-fi progression with 41–55Hz sub-bass at -18dB.
+- **Mandatory Cue Sheet**: Every scene selects `network`, `mechanical`, `storage`,
+  `security`, `compute`, or `protocol`, with at least one normalized cue in each of
+  the 0–30%, 30–60%, and 60–100% narrative beats.
+- **Cue Vocabulary**: `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
+  `processing`, `impact`, and `success`; intensity defaults to `0.5`.
+- **Profile Score**: Harmony, rhythm, and timbre follow the selected profile and
+  optional 40–240 BPM tempo. Cue SFX variants align exactly to scene event times.
+- **Determinism**: Topic plus canonical cue sheet derives the stable seed. Identical
+  scene inputs produce identical PCM; different topics or cue sheets change it.
+- **No Burned-In Captions**: The lower band remains empty breathing room. Social
+  posting copy continues to ship separately as `caption.txt`.
 
 ---
 
