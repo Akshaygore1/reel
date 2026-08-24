@@ -1,50 +1,55 @@
 ---
 name: blueprint-reel
-description: Produce @buildebugship dark warm-slate blueprint system-design reel videos (720x1280, 30fps, up to 30s, procedural game SFX, zero voiceover) with this repo's 100% Python engine. Use whenever the user asks to create, make, or generate a video, reel, short, or animation about any system design, backend, database, caching, networking, distributed-systems, security, or cloud topic — including casual phrasing like "video on X", "do a reel about X", or just a topic name.
+description: Produce dark warm-slate blueprint system-design reels with the local Python SceneV2 run harness, procedural game SFX, ambient synth, and zero voiceover.
 ---
 
 # Blueprint Reel Creator
 
-Turn any technical topic into a flagship-grade 9:16 reel. Everything is local:
-PIL frame rendering → numpy procedural audio → FFmpeg compile. No external APIs.
+Everything is local: Pillow frames, NumPy audio, FFmpeg compilation. Read
+`THEME_SPEC.md`, `engine/blueprint_engine.py`, `engine/diagram.py`, and the relevant
+existing generator before authoring a scene.
 
-All repo file paths mentioned in this skill (`THEME_SPEC.md`, `engine/…`,
-`generate.py`, `output/…`) are relative to the **workspace root**, not the skill
-directory. Only `references/` lives inside the skill.
+## Route and build
 
-## Read before building
+- Existing exact preset: `python3 generate.py --preset <key>`.
+- Explicit quick/generic request: `python3 generate.py --prompt "<topic>"`.
+- New topic by default: `python3 -m reel scaffold "<topic>" --json`, edit only the
+  resulting `.work/<run-id>/scene.py`, probe, then render.
 
-- `THEME_SPEC.md` — canvas spec, exact color tokens, Y-zone layout grid, sound design. Never invent colors; import them from `engine/blueprint_engine.py`.
-- `engine/blueprint_engine.py` — shared helpers: `draw_telemetry_hud`, `draw_caption_pill`, `track`, `alpha`, `ease`, `lerp`, font lambdas.
-- `engine/diagram.py` — polished nodes, named ports, orthogonal connectors,
-  packets, protocol buses, groups, prompts, and result panels for logical flows.
-- `engine/generators/database_indexing.py` — the most complete recent exemplar (3-beat state machine, calibrated counters, seek-orb hops).
-- `engine/generators/redis_vs_db.py` — a simpler exemplar.
+SceneV2 is deliberately constrained: the engine owns canvas, header, telemetry,
+caption-free lower breathing room, footer, branding, 30/60 beat boundaries, audio synchronization,
+multiprocessing, FFmpeg, FFprobe, and atomic publication. Scene code receives a
+clipped stage surface plus `FrameContext` with normalized progress, beat, beat
+progress, stage bounds, and locked theme tokens.
 
-## Route the request
+Never add an ordinary scene to `engine/generators/` or edit a registry. Preserve
+multiple treatments of the same topic as separate run IDs. The generic quick path
+must never be presented as a bespoke flagship treatment.
 
-1. **Topic already has a preset** (check the `PRESETS` dict in `generate.py` — e.g. `autoscaling`, `redis_vs_db`, `sql_injection`, `cron_jobs`, `database_indexing`): run `python3 generate.py --preset <key>` (add `--hd` for 1080x1920). Deliver.
-2. **User explicitly wants the quick generic path** (`--prompt`): run `python3 generate.py --prompt "<topic>"`. Deliver.
-3. **Default for any new topic**: build a **bespoke flagship reel** — hand-author the generator, verify per beat, compile, register. Follow `references/bespoke-generator-guide.md` end to end. Never ship the generic two-boxes blueprint when a real reel was asked for.
+## Visual and sound requirements
 
-## Non-negotiables
+- Three beats: normal 0–30%, crisis 30–60%, resolution 60–100%.
+- Use one mechanically animated, topic-specific apparatus; no generic box diagrams.
+- Logical architecture may use `engine/diagram.py`; physical concepts use bespoke
+  machinery. All animation is a pure function of frame context.
+- Locked blueprint palette and layout; configurable brand fields are in
+  `reel.config.json`.
+- Every `SCENE` defines a deterministic cue sheet using a profile (`network`,
+  `mechanical`, `storage`, `security`, `compute`, or `protocol`) and normalized
+  events. Use only `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
+  `processing`, `impact`, or `success`, with at least one cue in every beat.
+- Frames contain no burned-in posting captions; keep the lower band as breathing room.
+- Default 720×1280 at 30fps for 20 seconds. Choose 15s for a simple mechanism, 20s
+  for a standard three-beat explanation, 25s for a multi-stage comparison, and 30s
+  for a dense protocol. Values outside 15–30 seconds are invalid.
 
-- **3-beat narrative**: normal state at 0–30%, crisis at 30–60%, resolution at 60–100%. Default to 10s; use more time when the concept needs it, up to the 30s cap. Audio events follow the same proportional boundaries.
-- **Hybrid visual grammar**: architecture and flowcharts use `engine/diagram.py`;
-  physical concepts use bespoke apparatuses (spinning platters, cranes, hash
-  rings, B-trees, token buckets…). Draw connectors below nodes, attach through
-  named ports, reserve diagonals for physical perspective, and never ship plain
-  rectangles talking to each other.
-- **Zero voiceover.** Audio comes only from `engine.sfx_audio.build_game_soundtrack(path, duration=duration, beat1_end=duration*.30, beat2_end=duration*.60)`.
-- **Brand**: `@buildebugship` red `#fb7185` header, caption pill via `draw_caption_pill`, outro footer lines after frame 258.
-- **Output contract**: concept-driven frame sequence → `output/video_<slug>.mp4` (720x1280, 30fps, maximum 30.000s) + `output/video_<slug>.txt` viral caption.
+## Verify and deliver
 
-## Verify before delivering
+Run `python3 -m reel probe <run-id>` and visually inspect all three PNGs. Then run
+`python3 -m reel render <run-id>` and `python3 -m reel inspect <run-id>`. Deliver
+clickable links to the packaged video and caption, the verified manifest specs, and
+the full caption with attribution. Refreshes affect only ignored `output/catalog.js`.
 
-- Probe one frame per beat: `python3 engine/generators/<slug>.py .tmp_frames/<slug>_test 30 135 240`, then inspect each frame for clipping/overlap (Read the PNGs; vision analysis is best-effort — don't block on rate limits).
-- After compiling, `ffprobe` must report 720x1280, `30/1`, and the requested duration (never above `30.000000`).
-- Register the reel as a `PRESETS` entry + routing rule in `generate.py` so future prompts reuse it, and refresh the gallery via `engine.build_gallery.build_gallery_html()`.
-
-## Deliver
-
-Clickable `file://` links to the mp4 and txt, a spec line with the actual duration (maximum 30s), and the full caption text with `@buildebugship`.
+Only use `python3 -m reel promote <run-id>` when the user explicitly wants a run
+converted into reusable tracked source; confirmation and the full test suite are
+mandatory.

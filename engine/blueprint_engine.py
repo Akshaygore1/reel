@@ -131,7 +131,8 @@ def draw_cad_crosshairs(d, x, y, size=8, col=DIM):
     d.line([(x, y - size), (x, y + size)], fill=alpha(col, 0.7), width=1)
 
 def draw_header_bar(d, intro, handle="@buildebugship", comp_left="TRADITIONAL", comp_right="OPTIMIZED",
-                    title1="SYSTEM", title_vs="vs", title2="DESIGN", subhook="how distributed systems scale seamlessly"):
+                    title1="SYSTEM", title_vs="vs", title2="DESIGN", subhook="how distributed systems scale seamlessly",
+                    brand_accent=RED):
     """
     Renders standard header with glowing @buildebugship branding pill and CAD technical layout
     """
@@ -146,23 +147,30 @@ def draw_header_bar(d, intro, handle="@buildebugship", comp_left="TRADITIONAL", 
     pill_w = d.textlength(handle, font=MONOB(12)) + 36
     px0, py0 = W / 2 - pill_w / 2, 148
     px1, py1 = W / 2 + pill_w / 2, 172
-    d.rounded_rectangle([px0, py0, px1, py1], radius=12, fill=(18, 14, 20), outline=alpha(RED, 0.8 * intro), width=1)
+    d.rounded_rectangle([px0, py0, px1, py1], radius=12, fill=(18, 14, 20), outline=alpha(brand_accent, 0.8 * intro), width=1)
     # Pulsing red LED
-    d.ellipse([px0 + 10, py0 + 8, px0 + 16, py0 + 14], fill=RED)
+    d.ellipse([px0 + 10, py0 + 8, px0 + 16, py0 + 14], fill=brand_accent)
     d.text((px0 + 24, py0 + 11), handle, font=MONOB(12), fill=alpha(WHITE, intro), anchor="lm")
 
     # Comparison Tag Pill
     comp_str = f"{comp_left}   vs   {comp_right}"
     track(d, (W / 2, 192), comp_str, MONOB(11), alpha(MUTED, intro), sp=2, anchor="mm")
 
-    # Large Bold Headline
-    tw1 = d.textlength(title1 + " ", font=SANSB(40))
-    tw2 = d.textlength(title_vs + " ", font=SANSB(32))
-    tw3 = d.textlength(title2, font=SANSB(40))
+    # Large Bold Headline, fitted to the safe horizontal span.
+    title_size, vs_size = 40, 32
+    while True:
+        title_font, vs_font = SANSB(title_size), SANSB(vs_size)
+        tw1 = d.textlength(title1 + " ", font=title_font)
+        tw2 = d.textlength(title_vs + " ", font=vs_font)
+        tw3 = d.textlength(title2, font=title_font)
+        if tw1 + tw2 + tw3 <= W - 80 or title_size <= 20:
+            break
+        title_size -= 1
+        vs_size = max(20, title_size - 8)
     sx = W / 2 - (tw1 + tw2 + tw3) / 2
-    d.text((sx, 228), title1 + " ", font=SANSB(40), fill=alpha(WHITE, intro), anchor="lm")
-    d.text((sx + tw1, 230), title_vs + " ", font=SANSB(32), fill=alpha(DIM, intro), anchor="lm")
-    d.text((sx + tw1 + tw2, 228), title2, font=SANSB(40), fill=alpha(TEAL, intro), anchor="lm")
+    d.text((sx, 228), title1 + " ", font=title_font, fill=alpha(WHITE, intro), anchor="lm")
+    d.text((sx + tw1, 230), title_vs + " ", font=vs_font, fill=alpha(DIM, intro), anchor="lm")
+    d.text((sx + tw1 + tw2, 228), title2, font=title_font, fill=alpha(TEAL, intro), anchor="lm")
 
     # Subhook Context
     d.text((W / 2, 268), subhook, font=SANS(13), fill=alpha(BLUE, intro * 0.95), anchor="mm")
@@ -187,21 +195,8 @@ def draw_telemetry_hud(d, m1_label, m1_val, m2_label, m2_val, a, m1_col=TEAL, m2
     d.text((rx1 - 14, ry0 + 48), m2_val, font=MONOB(20), fill=alpha(m2_col, a), anchor="rm")
 
 def draw_caption_pill(d, fr, captions, a):
-    """Renders modern glassmorphic lower context pill with synchronized story progression"""
-    cap = captions[0][1]
-    for st, tx in captions:
-        if fr >= st: cap = tx
-    cf = SANSB(14)
-    tw = d.textlength(cap, font=cf)
-    pw = min(W - 80, max(360, tw + 48))
-    px0, py0 = W / 2 - pw / 2, 980
-    px1, py1 = W / 2 + pw / 2, 1028
-    
-    # Outer capsule
-    d.rounded_rectangle([px0, py0, px1, py1], radius=24, fill=(14, 18, 26), outline=alpha(TEAL, a * 0.5), width=1)
-    # Inner glowing border
-    d.rounded_rectangle([px0 + 2, py0 + 2, px1 - 2, py1 - 2], radius=22, fill=(10, 13, 20), outline=alpha(DIM, 0.4), width=1)
-    d.text((W / 2, 1004), cap, font=cf, fill=WHITE, anchor="mm")
+    """Compatibility no-op: posting captions are never burned into video frames."""
+    return None
 
 def draw_loop_particle_flow(d, path_points, t, num_particles=8, col=TEAL):
     """

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blueprint-reel"
+version = "2.0.0"
+description = "Portable local harness for dark warm-slate system-design reels"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy>=1.24",
+  "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+reel = "reel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["reel*", "engine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
