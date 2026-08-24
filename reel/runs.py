@@ -161,16 +161,6 @@ def clean_work() -> int:
 def migrate_legacy() -> list[str]:
     """Move flat video_*.mp4/.txt pairs into run directories without re-encoding."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    # Idempotently bring any earlier migration manifests up to the current schema.
-    for manifest_path in OUTPUT_DIR.glob("*/manifest.json"):
-        try:
-            existing = read_json(manifest_path)
-            if existing.get("mode") == "legacy-migration":
-                existing.setdefault("scene", "scene.py")
-                existing.setdefault("brief", "brief.json")
-                write_json(manifest_path, existing)
-        except (OSError, ValueError, json.JSONDecodeError):
-            continue
     migrated: list[str] = []
     for video in sorted(OUTPUT_DIR.glob("video_*.mp4")):
         topic = video.stem.removeprefix("video_").replace("_", " ")

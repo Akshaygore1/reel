@@ -35,7 +35,7 @@ SCENE = {scene_json}
 def draw_stage(surface: StageSurface, context: FrameContext) -> None:
     """Bespoke three-beat apparatus, using stage-local coordinates (624x550)."""
     d = surface.draw
-    t, beat, q = context.progress, context.beat, context.beat_progress
+    t, beat = context.progress, context.beat
     col = bp.BLUE if beat == 1 else (bp.RED if beat == 2 else bp.GREEN)
     pulse = .65 + .35 * math.sin(context.frame * .35)
     # A physical routing rotor: packets orbit, overload jams it, shards resolve it.
@@ -58,12 +58,10 @@ def draw_stage(surface: StageSurface, context: FrameContext) -> None:
 '''
 
 
-def _default_scene(topic: str, brand_handle: str, brand_accent: str) -> dict:
+def _default_scene(topic: str) -> dict:
     title_words = topic.upper().split()
     return {
         "topic": topic,
-        "handle": brand_handle,
-        "brand_accent": brand_accent,
         "comparison": "BASELINE  vs  RESILIENT DESIGN",
         "title_left": " ".join(title_words[:2])[:18] or "SYSTEM",
         "title_right": "BLUEPRINT",
@@ -104,8 +102,7 @@ def create_run(topic: str, duration: float = DEFAULT_DURATION, resolution: str =
     run_id = new_run_id(topic)
     run_work = work_path(run_id)
     run_work.mkdir(parents=True, exist_ok=False)
-    brand = load_brand()
-    scene = _default_scene(topic, brand.handle, brand.accent)
+    scene = _default_scene(topic)
     if audio_plan is not None:
         scene["audio"] = audio_plan
     brief = {
@@ -140,10 +137,11 @@ def _draw_chrome(base: Image.Image, scene: dict, frame: int, frame_count: int) -
     d = ImageDraw.Draw(base)
     ctx = frame_context(frame, frame_count)
     intro = bp.ease(frame / max(1, int(FPS * .45)))
-    accent_hex = scene.get("brand_accent", "#fb7185").lstrip("#")
+    brand = load_brand()
+    accent_hex = brand.accent.lstrip("#")
     brand_accent = tuple(int(accent_hex[index:index + 2], 16) for index in (0, 2, 4))
     bp.draw_header_bar(
-        d, intro, handle=scene.get("handle", "@buildebugship"),
+        d, intro, handle=brand.handle,
         comp_left=scene.get("comparison", "BASELINE vs RESILIENT").split("vs")[0].strip(),
         comp_right=scene.get("comparison", "BASELINE vs RESILIENT").split("vs")[-1].strip(),
         title1=scene.get("title_left", "SYSTEM"), title_vs="vs",
@@ -229,7 +227,7 @@ def _verify(video: Path, duration: float, resolution: str) -> dict:
         raise RuntimeError("compiled video dimensions do not match the run brief")
     if visual.get("r_frame_rate") != "30/1" or not audio:
         raise RuntimeError("compiled video must contain 30fps video and an audio stream")
-    if actual > 30.01 or abs(actual - duration) > .12:
+    if actual > MAX_DURATION + .001 or abs(actual - duration) > .001:
         raise RuntimeError(f"compiled duration {actual:.3f}s does not match {duration:.3f}s")
     return probe
 

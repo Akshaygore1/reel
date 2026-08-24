@@ -12,12 +12,13 @@ import numpy as np
 
 SAMPLE_RATE = 44_100
 PROFILES = {
-    "network": {"tempo_bpm": 108, "root": 146.83, "color": (1.0, 1.25, 1.50)},
-    "mechanical": {"tempo_bpm": 92, "root": 110.00, "color": (1.0, 1.50, 2.00)},
-    "storage": {"tempo_bpm": 84, "root": 98.00, "color": (1.0, 1.20, 1.50)},
-    "security": {"tempo_bpm": 96, "root": 123.47, "color": (1.0, 1.19, 1.50)},
-    "compute": {"tempo_bpm": 116, "root": 164.81, "color": (1.0, 1.25, 1.498)},
-    "protocol": {"tempo_bpm": 100, "root": 130.81, "color": (1.0, 1.26, 1.50)},
+    # timbre = nonlinear drive, differentiated brightness, deterministic noise.
+    "network": {"tempo_bpm": 108, "root": 146.83, "color": (1.0, 1.25, 1.50), "timbre": (1.20, .08, .002)},
+    "mechanical": {"tempo_bpm": 92, "root": 110.00, "color": (1.0, 1.50, 2.00), "timbre": (1.85, .18, .006)},
+    "storage": {"tempo_bpm": 84, "root": 98.00, "color": (1.0, 1.20, 1.50), "timbre": (1.50, .05, .003)},
+    "security": {"tempo_bpm": 96, "root": 123.47, "color": (1.0, 1.19, 1.50), "timbre": (2.20, .10, .004)},
+    "compute": {"tempo_bpm": 116, "root": 164.81, "color": (1.0, 1.25, 1.498), "timbre": (1.30, .14, .002)},
+    "protocol": {"tempo_bpm": 100, "root": 130.81, "color": (1.0, 1.26, 1.50), "timbre": (1.10, .06, .001)},
 }
 CUE_KINDS = frozenset({
     "blip", "packet", "tick", "queue", "alarm", "latch", "sweep",
@@ -104,51 +105,54 @@ def _tone(duration: float, frequency: np.ndarray | float, amplitude: float, deca
     return np.sin(phase) * envelope * amplitude
 
 
+def _apply_profile_timbre(signal: np.ndarray, profile: dict, rng: np.random.Generator) -> np.ndarray:
+    """Color every cue with the selected profile's deterministic SFX character."""
+    drive, brightness, noise = profile["timbre"]
+    colored = np.tanh(signal * drive) / drive
+    differentiated = np.diff(signal, prepend=signal[0])
+    envelope = np.sin(np.linspace(0, np.pi, len(signal))) if len(signal) else signal
+    return colored + differentiated * brightness + rng.normal(0, noise, len(signal)) * envelope
+
+
 def _cue_signal(kind: str, intensity: float, profile: dict, rng: np.random.Generator) -> np.ndarray:
     root = profile["root"] * rng.uniform(.97, 1.03)
     amplitude = .07 + .21 * intensity
     if kind == "blip":
-        return _tone(.09, root * rng.uniform(5.5, 7.5), amplitude, 8)
+        signal = _tone(.09, root * rng.uniform(5.5, 7.5), amplitude, 8)
     if kind == "packet":
         count = round(.16 * SAMPLE_RATE); frequencies = np.linspace(root * 3.2, root * 5.0, count)
-        return _tone(.16, frequencies, amplitude, 6)
+        signal = _tone(.16, frequencies, amplitude, 6)
     if kind == "tick":
         signal = rng.normal(0, 1, round(.035 * SAMPLE_RATE))
-        return signal * np.exp(-np.arange(len(signal)) / (SAMPLE_RATE * .005)) * amplitude * .75
+        signal = signal * np.exp(-np.arange(len(signal)) / (SAMPLE_RATE * .005)) * amplitude * .75
     if kind == "queue":
         signal = np.zeros(round(.55 * SAMPLE_RATE))
         for offset in (0, .13, .26, .39):
             _add(signal, round(offset * SAMPLE_RATE), _tone(.12, root * 1.5, amplitude * .65, 7))
-        return signal
     if kind == "alarm":
         count = round(.8 * SAMPLE_RATE); frequencies = np.linspace(root * 2.8, root * .8, count)
         signal = _tone(.8, frequencies, amplitude * 1.2, 2.8)
         signal *= .55 + .45 * np.sin(2 * np.pi * 18 * np.arange(count) / SAMPLE_RATE)
-        return signal
     if kind == "latch":
         signal = rng.normal(0, 1, round(.2 * SAMPLE_RATE))
         signal *= np.exp(-np.arange(len(signal)) / (SAMPLE_RATE * .012)) * amplitude * .6
         _add(signal, round(.045 * SAMPLE_RATE), _tone(.13, root * .8, amplitude, 7))
-        return signal
     if kind == "sweep":
         count = round(.65 * SAMPLE_RATE); frequencies = np.geomspace(root, root * 10, count)
         signal = _tone(.65, frequencies, amplitude * .75, 2)
         signal += rng.normal(0, amplitude * .08, count) * np.sin(np.linspace(0, np.pi, count))
-        return signal
     if kind == "processing":
         signal = np.zeros(round(.75 * SAMPLE_RATE))
         for offset in np.arange(0, .7, .1):
             _add(signal, round(offset * SAMPLE_RATE), _tone(.075, root * rng.uniform(4, 7), amplitude * .45, 8))
-        return signal
     if kind == "impact":
         count = round(.7 * SAMPLE_RATE); frequencies = np.linspace(root, root * .32, count)
-        return _tone(.7, frequencies, amplitude * 1.35, 4)
+        signal = _tone(.7, frequencies, amplitude * 1.35, 4)
     if kind == "success":
         signal = np.zeros(round(1.15 * SAMPLE_RATE))
         for delay, ratio in ((0, 2), (.08, 2.5), (.16, 3)):
             _add(signal, round(delay * SAMPLE_RATE), _tone(.95, root * ratio, amplitude * .72, 3.4))
-        return signal
-    raise AssertionError(kind)
+    return _apply_profile_timbre(signal, profile, rng)
 
 
 def _ambient(duration: float, plan: AudioPlan, rng: np.random.Generator) -> np.ndarray:

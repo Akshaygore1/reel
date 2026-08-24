@@ -237,7 +237,7 @@ class AudioContractTests(unittest.TestCase):
         from reel.rendering import _default_scene, _draw_chrome
         image = Image.new("RGB", (bp.W, bp.H), bp.BG)
         with mock.patch.object(bp, "draw_caption_pill") as caption:
-            _draw_chrome(image, _default_scene("Cache", "@buildebugship", "#fb7185"), 200, 600)
+            _draw_chrome(image, _default_scene("Cache"), 200, 600)
             caption.assert_not_called()
         legacy = Image.new("RGB", (bp.W, bp.H), bp.BG)
         before = legacy.tobytes()
@@ -291,7 +291,7 @@ class FFmpegIntegrationTests(unittest.TestCase):
                 self.assertEqual(streams["video"]["codec_name"], "h264")
                 self.assertEqual(streams["video"]["r_frame_rate"], "30/1")
                 self.assertEqual(streams["audio"]["codec_name"], "aac")
-                self.assertAlmostEqual(float(probe["format"]["duration"]), duration, places=2)
+                self.assertEqual(float(probe["format"]["duration"]), duration)
 
 
 if __name__ == "__main__": unittest.main()
