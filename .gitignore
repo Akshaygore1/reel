@@ -1,0 +1,37 @@
+# Generated run artifacts (keep only the directory marker in Git).
+output/*
+!output/.gitkeep
+.work/
+audio/
+.tmp*/
+.playwright-mcp/
+
+# Python/package caches and local environments.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# OS/editor/browser noise.
+.DS_Store
+Thumbs.db
+*.log
+
+# Media is generated locally, never source-controlled.
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.aac
+*.m4a
+
