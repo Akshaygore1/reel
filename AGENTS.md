@@ -13,6 +13,9 @@ blueprint style. Ordinary generation must not modify tracked source files.
    Choose 15s for simple mechanisms, 20s for standard three-beat explanations, 25s
    for multi-stage comparisons, or 30s for dense protocols. Add a mandatory
    profile-specific normalized audio cue sheet with at least one cue in every beat.
+   Define exactly three non-empty `captions` entries for the 0–30%, 30–60%, and
+   60–100% beats. Headlines use `title_left` and `title_right`; set
+   `title_connector` only when a connector such as `vs` is semantically required.
 5. Inspect all beats with `python3 -m reel probe <run-id>`, then render with
    `python3 -m reel render <run-id>`.
 6. Deliver `output/<run-id>/video.mp4`, `caption.txt`, and the manifest specs.
@@ -24,8 +27,9 @@ Never register an ordinary run or write into `engine/generators/`. Only
 `python3 -m reel promote <run-id>` may intentionally create reusable tracked source,
 and it requires explicit confirmation plus the full validation suite.
 
-The engine owns branding, header, HUD, caption-free breathing room, footer, timing,
-cue-sheet audio, compilation, verification, and output promotion. Reel duration is
-15–30 seconds with a 20-second fallback. Posting copy stays in `caption.txt` and is
-never burned into frames. Visual/audio grammar stays locked; brand fields come from
-`reel.config.json`. Runs are immutable and are deleted only through the confirmed CLI command.
+The engine owns branding, header, HUD, synchronized story-caption pill, footer,
+timing, cue-sheet audio, compilation, verification, and output promotion. Reel
+duration is 15–30 seconds with a 20-second fallback. Story captions are burned into
+frames; separate social posting copy stays in `caption.txt`. Visual/audio grammar
+stays locked; brand fields come from `reel.config.json`. Runs are immutable and are
+deleted only through the confirmed CLI command.

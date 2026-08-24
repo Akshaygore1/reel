@@ -1,8 +1,8 @@
 # Blueprint Reel Harness
 
 A local, cross-platform Python harness for 9:16 system-design reels. Pillow renders
-the caption-free blueprint visuals, NumPy synthesizes scene-synchronized zero-voiceover
-game SFX and ambient music,
+blueprint visuals with scene-synchronized story captions, NumPy synthesizes
+scene-synchronized zero-voiceover game SFX and ambient music,
 and FFmpeg compiles verified H.264/AAC videos.
 
 ## Setup
@@ -44,10 +44,28 @@ SCENE["audio"] = {
 }
 ```
 
+Each `SCENE` also requires exactly three non-empty story captions, selected at the
+0%, 30%, and 60% beat boundaries. A headline is composed from two color fields;
+the connector defaults to blank and must be explicit for real comparisons:
+
+```python
+SCENE.update({
+    "title_left": "DATABASE",
+    "title_connector": "",
+    "title_right": "JOINS",
+    "captions": [
+        "The normal path.",
+        "The production bottleneck.",
+        "The architecture resolution.",
+    ],
+})
+```
+
 Cue kinds are `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
 `processing`, `impact`, and `success`; intensity defaults to `0.5`. Invalid or
-incomplete plans fail before frames render. Frames contain no posting-caption text,
-while every output kit still includes a populated `caption.txt`.
+incomplete plans fail before frames render. The three short story captions are
+burned into the lower glass pill, while separate posting copy ships in the populated
+`caption.txt`.
 
 Successful runs are immutable kits under `output/<run-id>/` containing `video.mp4`,
 `caption.txt`, `manifest.json`, `poster.jpg`, `brief.json`, and `scene.py`. Heavy

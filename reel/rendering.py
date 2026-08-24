@@ -60,11 +60,14 @@ def draw_stage(surface: StageSurface, context: FrameContext) -> None:
 
 def _default_scene(topic: str) -> dict:
     title_words = topic.upper().split()
+    if len(title_words) > 1 and title_words[-1] == "EXPLAINED":
+        title_words = title_words[:-1]
     return {
         "topic": topic,
         "comparison": "BASELINE  vs  RESILIENT DESIGN",
-        "title_left": " ".join(title_words[:2])[:18] or "SYSTEM",
-        "title_right": "BLUEPRINT",
+        "title_left": title_words[0][:18] if title_words else "SYSTEM",
+        "title_connector": "",
+        "title_right": " ".join(title_words[1:])[:28],
         "subhook": f"how {topic.lower()} behaves under production load"[:78],
         "hud": ["LATENCY", "0.4ms", "THROUGHPUT", "12k req/s"],
         "captions": [
@@ -112,7 +115,7 @@ def create_run(topic: str, duration: float = DEFAULT_DURATION, resolution: str =
         "narrative": {"beat_1": "normal state", "beat_2": "crisis", "beat_3": "architecture resolution"},
         "constraints": {"stage_bounds": list(STAGE_BOUNDS), "zero_voiceover": True,
                         "min_duration": MIN_DURATION, "max_duration": MAX_DURATION,
-                        "burned_in_captions": False},
+                        "burned_in_captions": True},
         "audio": _audio_metadata(topic, scene["audio"]),
     }
     write_json(run_work / "brief.json", brief)
@@ -133,6 +136,22 @@ def _load_scene(scene_path: Path):
     return module
 
 
+def validate_scene_captions(value: object) -> tuple[str, str, str]:
+    """Validate the required three SceneV2 story captions."""
+    if not isinstance(value, list) or len(value) != 3:
+        raise ValueError("SCENE['captions'] must contain exactly three story captions")
+    captions = tuple(item.strip() if isinstance(item, str) else "" for item in value)
+    if any(not item for item in captions):
+        raise ValueError("SCENE['captions'] entries must be non-empty strings")
+    return captions
+
+
+def caption_for_progress(captions: object, progress: float) -> str:
+    """Select the story caption for the 0–30%, 30–60%, or 60–100% beat."""
+    first, second, third = validate_scene_captions(captions)
+    return first if progress < .3 else (second if progress < .6 else third)
+
+
 def _draw_chrome(base: Image.Image, scene: dict, frame: int, frame_count: int) -> None:
     d = ImageDraw.Draw(base)
     ctx = frame_context(frame, frame_count)
@@ -144,8 +163,8 @@ def _draw_chrome(base: Image.Image, scene: dict, frame: int, frame_count: int) -
         d, intro, handle=brand.handle,
         comp_left=scene.get("comparison", "BASELINE vs RESILIENT").split("vs")[0].strip(),
         comp_right=scene.get("comparison", "BASELINE vs RESILIENT").split("vs")[-1].strip(),
-        title1=scene.get("title_left", "SYSTEM"), title_vs="vs",
-        title2=scene.get("title_right", "BLUEPRINT"), subhook=scene.get("subhook", ""),
+        title1=scene.get("title_left", "SYSTEM"), title_vs=scene.get("title_connector", ""),
+        title2=scene.get("title_right", ""), subhook=scene.get("subhook", ""),
         brand_accent=brand_accent,
     )
     hud = scene.get("hud", ["LATENCY", "0.4ms", "THROUGHPUT", "12k req/s"])
@@ -156,6 +175,8 @@ def _draw_chrome(base: Image.Image, scene: dict, frame: int, frame_count: int) -
     else:
         values, colors = hud, [bp.TEAL, bp.BLUE]
     bp.draw_telemetry_hud(d, *values, intro, m1_col=colors[0], m2_col=colors[1])
+    caption = caption_for_progress(scene.get("captions"), ctx.progress)
+    bp.draw_caption_pill(d, frame, [(0, caption)], intro)
     if ctx.progress >= .86:
         out = bp.ease((ctx.progress - .86) / .1)
         bp.track(d, (bp.W / 2, 1090), scene.get("footer", "SYSTEM DESIGN BLUEPRINT"), bp.MONOB(11), bp.alpha(bp.TEAL, out), sp=2, anchor="mm")
@@ -183,6 +204,7 @@ def probe_run(run_id: str) -> list[Path]:
     validate_duration(brief["duration"])
     module = _load_scene(run_work / "scene.py")
     validate_audio_plan(module.SCENE.get("audio"))
+    validate_scene_captions(module.SCENE.get("captions"))
     frame_count = max(3, round(brief["duration"] * FPS))
     probe_dir = run_work / "diagnostics" / "probes"
     probe_dir.mkdir(parents=True, exist_ok=True)
@@ -234,7 +256,9 @@ def _verify(video: Path, duration: float, resolution: str) -> dict:
 
 def _caption(topic: str) -> str:
     brand = load_brand()
-    return (f"{topic} explained as a three-beat system design blueprint.\n\n"
+    topic = topic.strip()
+    lead = topic if topic.lower().endswith(" explained") else f"{topic} explained"
+    return (f"{lead} as a three-beat system design blueprint.\n\n"
             "Watch the normal path, the production bottleneck, and the architecture change that restores healthy flow.\n\n"
             f"{brand.cta}\n\n#systemdesign #backend #architecture #devops #distributedSystems\n"
             f"\n{brand.caption_attribution}")
@@ -277,6 +301,7 @@ def render_run(run_id: str, keep_work: bool = False) -> Path:
     try:
         module = _load_scene(run_work / "scene.py")
         audio_plan = validate_audio_plan(module.SCENE.get("audio"))
+        validate_scene_captions(module.SCENE.get("captions"))
         brief["schema_version"] = 2
         brief["audio"] = _audio_metadata(brief["topic"], audio_plan.canonical())
         write_json(run_work / "brief.json", brief)

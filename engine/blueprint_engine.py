@@ -156,21 +156,27 @@ def draw_header_bar(d, intro, handle="@buildebugship", comp_left="TRADITIONAL", 
     comp_str = f"{comp_left}   vs   {comp_right}"
     track(d, (W / 2, 192), comp_str, MONOB(11), alpha(MUTED, intro), sp=2, anchor="mm")
 
-    # Large Bold Headline, fitted to the safe horizontal span.
+    # Large bold headline. The connector contributes no width when omitted;
+    # legacy generators keep their explicit title_vs values.
     title_size, vs_size = 40, 32
     while True:
         title_font, vs_font = SANSB(title_size), SANSB(vs_size)
-        tw1 = d.textlength(title1 + " ", font=title_font)
-        tw2 = d.textlength(title_vs + " ", font=vs_font)
+        left_text = title1 + (" " if title2 or title_vs else "")
+        connector_text = title_vs + (" " if title_vs and title2 else "")
+        tw1 = d.textlength(left_text, font=title_font)
+        tw2 = d.textlength(connector_text, font=vs_font) if connector_text else 0
         tw3 = d.textlength(title2, font=title_font)
         if tw1 + tw2 + tw3 <= W - 80 or title_size <= 20:
             break
         title_size -= 1
         vs_size = max(20, title_size - 8)
     sx = W / 2 - (tw1 + tw2 + tw3) / 2
-    d.text((sx, 228), title1 + " ", font=title_font, fill=alpha(WHITE, intro), anchor="lm")
-    d.text((sx + tw1, 230), title_vs + " ", font=vs_font, fill=alpha(DIM, intro), anchor="lm")
-    d.text((sx + tw1 + tw2, 228), title2, font=title_font, fill=alpha(TEAL, intro), anchor="lm")
+    if left_text:
+        d.text((sx, 228), left_text, font=title_font, fill=alpha(WHITE, intro), anchor="lm")
+    if connector_text:
+        d.text((sx + tw1, 230), connector_text, font=vs_font, fill=alpha(DIM, intro), anchor="lm")
+    if title2:
+        d.text((sx + tw1 + tw2, 228), title2, font=title_font, fill=alpha(TEAL, intro), anchor="lm")
 
     # Subhook Context
     d.text((W / 2, 268), subhook, font=SANS(13), fill=alpha(BLUE, intro * 0.95), anchor="mm")
@@ -195,8 +201,61 @@ def draw_telemetry_hud(d, m1_label, m1_val, m2_label, m2_val, a, m1_col=TEAL, m2
     d.text((rx1 - 14, ry0 + 48), m2_val, font=MONOB(20), fill=alpha(m2_col, a), anchor="rm")
 
 def draw_caption_pill(d, fr, captions, a):
-    """Compatibility no-op: posting captions are never burned into video frames."""
-    return None
+    """Render a timed story caption in the lower glass pill."""
+    if not captions:
+        raise ValueError("captions must contain at least one timed entry")
+    cap = captions[0][1]
+    for start, text in captions:
+        if fr >= start:
+            cap = text
+    cap = str(cap).strip()
+    if not cap:
+        raise ValueError("caption text must be non-empty")
+
+    max_text_width = W - 144
+
+    def wrap(text, selected_font):
+        words, lines, current = text.split(), [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if not current or d.textlength(candidate, font=selected_font) <= max_text_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines
+
+    font_size = 14
+    while True:
+        caption_font = SANSB(font_size)
+        lines = wrap(cap, caption_font)
+        if len(lines) <= 2 and all(d.textlength(line, font=caption_font) <= max_text_width for line in lines):
+            break
+        if font_size <= 6:
+            raise ValueError("caption is too long to fit inside the two-line story pill")
+        font_size -= 1
+
+    line_height = font_size + 6
+    pill_height = 48 if len(lines) == 1 else 64
+    max_line_width = max(d.textlength(line, font=caption_font) for line in lines)
+    pill_width = min(W - 80, max(360, max_line_width + 48))
+    px0, py0 = W / 2 - pill_width / 2, 1004 - pill_height / 2
+    px1, py1 = W / 2 + pill_width / 2, 1004 + pill_height / 2
+    d.rounded_rectangle([px0, py0, px1, py1], radius=pill_height / 2,
+                        fill=(14, 18, 26), outline=alpha(TEAL, a * .5), width=1)
+    d.rounded_rectangle([px0 + 2, py0 + 2, px1 - 2, py1 - 2], radius=pill_height / 2 - 2,
+                        fill=(10, 13, 20), outline=alpha(DIM, .4), width=1)
+    first_y = 1004 - (len(lines) - 1) * line_height / 2
+    for index, line in enumerate(lines):
+        d.text((W / 2, first_y + index * line_height), line, font=caption_font,
+               fill=alpha(WHITE, a), anchor="mm")
+    return {
+        "caption": cap, "lines": tuple(lines), "font_size": font_size,
+        "bounds": (px0, py0, px1, py1), "max_text_width": max_text_width,
+        "line_widths": tuple(d.textlength(line, font=caption_font) for line in lines),
+    }
 
 def draw_loop_particle_flow(d, path_points, t, num_particles=8, col=TEAL):
     """

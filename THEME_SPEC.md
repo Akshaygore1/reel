@@ -58,7 +58,7 @@ GREEN_D   = (6, 95, 70)      # Dark Green for Scaled Container Tubes
 │                                                         │
 │ ═══════════════════════════════════════════════════════ │
 │                                                         │
-│              CAPTION-FREE VISUAL BREATHING ROOM         │  Y: 986 - 1024
+│       SYNCHRONIZED GLASS-PILL STORY CAPTION (1–2 lines) │  Y: 972 - 1036
 │                                                         │
 │                                                         │  Y: 1040 - 1280 (Bottom safe zone)
 └─────────────────────────────────────────────────────────┘
@@ -78,12 +78,21 @@ GREEN_D   = (6, 95, 70)      # Dark Green for Scaled Container Tubes
   optional 40–240 BPM tempo. Cue SFX variants align exactly to scene event times.
 - **Determinism**: Topic plus canonical cue sheet derives the stable seed. Identical
   scene inputs produce identical PCM; different topics or cue sheets change it.
-- **No Burned-In Captions**: The lower band remains empty breathing room. Social
-  posting copy continues to ship separately as `caption.txt`.
+- **Burned-In Story Captions**: Exactly three non-empty captions follow the 0–30%,
+  30–60%, and 60–100% beats in a responsive one- or two-line glass pill below the
+  apparatus. Separate social posting copy continues to ship as `caption.txt`.
 
 ---
 
-## 5. Hybrid Visual Grammar
+## 5. Headline Composition
+
+- `title_left` and `title_right` retain the two-color headline treatment.
+- `title_connector` defaults to an empty string and reserves no space when empty.
+- Set `title_connector` to `vs` only for a genuine comparison headline.
+
+---
+
+## 6. Hybrid Visual Grammar
 
 Use `engine/diagram.py` for architecture, protocols, dependencies, and logical
 flows. Continue using bespoke isometric machinery for physical concepts. This is

@@ -231,18 +231,96 @@ class AudioContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError): render_run(brief["run_id"])
                 self.assertFalse((work / brief["run_id"] / "frames").exists())
 
-    def test_scenev2_chrome_and_legacy_primitive_do_not_draw_caption_pills(self):
-        from PIL import Image, ImageDraw
+    def test_scenev2_captions_follow_exact_beat_boundaries(self):
+        from reel.rendering import caption_for_progress
+        captions = ["normal", "crisis", "resolution"]
+        self.assertEqual(caption_for_progress(captions, 0), "normal")
+        self.assertEqual(caption_for_progress(captions, .29999), "normal")
+        self.assertEqual(caption_for_progress(captions, .3), "crisis")
+        self.assertEqual(caption_for_progress(captions, .59999), "crisis")
+        self.assertEqual(caption_for_progress(captions, .6), "resolution")
+        self.assertEqual(caption_for_progress(captions, 1), "resolution")
+
+    def test_scenev2_rejects_missing_empty_or_wrong_sized_caption_lists(self):
+        from reel.rendering import validate_scene_captions
+        invalid = [None, [], ["one"], ["one", "two"],
+                   ["one", "two", "three", "four"],
+                   ["one", "", "three"], ["one", "   ", "three"]]
+        for captions in invalid:
+            with self.subTest(captions=captions), self.assertRaises(ValueError):
+                validate_scene_captions(captions)
+        self.assertEqual(validate_scene_captions([" one ", "two", "three "]),
+                         ("one", "two", "three"))
+
+    def test_scenev2_and_legacy_caption_pills_render_inside_lower_band(self):
+        from PIL import Image, ImageChops, ImageDraw
         from engine import blueprint_engine as bp
         from reel.rendering import _default_scene, _draw_chrome
         image = Image.new("RGB", (bp.W, bp.H), bp.BG)
-        with mock.patch.object(bp, "draw_caption_pill") as caption:
-            _draw_chrome(image, _default_scene("Cache"), 200, 600)
-            caption.assert_not_called()
+        _draw_chrome(image, _default_scene("Cache"), 180, 600)
+        caption_band = ImageChops.difference(
+            image.crop((0, 970, bp.W, 1040)),
+            Image.new("RGB", (bp.W, 70), bp.BG),
+        )
+        self.assertIsNotNone(caption_band.getbbox())
+
         legacy = Image.new("RGB", (bp.W, bp.H), bp.BG)
-        before = legacy.tobytes()
-        bp.draw_caption_pill(ImageDraw.Draw(legacy), 1, [(0, "caption")], 1)
-        self.assertEqual(legacy.tobytes(), before)
+        layout = bp.draw_caption_pill(
+            ImageDraw.Draw(legacy), 30,
+            [(0, "first"), (20, "A long database joins caption that must fit safely inside the glass pill even when the explanation includes build-side selection, memory pressure, probe behavior, matching keys, output rows, and the O(N+M) cost of an equi-join")], 1,
+        )
+        changed = ImageChops.difference(legacy, Image.new("RGB", legacy.size, bp.BG)).getbbox()
+        self.assertIsNotNone(changed)
+        self.assertGreaterEqual(changed[1], 970)
+        self.assertLessEqual(changed[3], 1040)
+        self.assertIn("O(N+M) cost", layout["caption"])
+        self.assertNotIn("…", " ".join(layout["lines"]))
+        self.assertLessEqual(len(layout["lines"]), 2)
+        self.assertTrue(all(width <= layout["max_text_width"] for width in layout["line_widths"]))
+
+    def test_blank_and_explicit_headline_connectors_render_without_hidden_spacing(self):
+        from PIL import Image, ImageDraw
+        from engine import blueprint_engine as bp
+
+        def headline(connector):
+            image = Image.new("RGB", (bp.W, bp.H), bp.BG)
+            bp.draw_header_bar(ImageDraw.Draw(image), 1, title1="DATABASE",
+                               title_vs=connector, title2="JOINS")
+            return image.crop((0, 212, bp.W, 252))
+
+        blank, comparison = headline(""), headline("vs")
+        blank_pixels = blank.load()
+        comparison_pixels = comparison.load()
+        blank_dim = sum(blank_pixels[x, y] == bp.DIM for x in range(bp.W) for y in range(blank.height))
+        comparison_dim = sum(comparison_pixels[x, y] == bp.DIM for x in range(bp.W) for y in range(comparison.height))
+        self.assertEqual(blank_dim, 0)
+        self.assertGreater(comparison_dim, 0)
+
+        def color_bounds(image, color):
+            points = [(x, y) for y in range(image.height) for x in range(image.width)
+                      if image.getpixel((x, y)) == color]
+            return min(x for x, _ in points), max(x for x, _ in points)
+
+        blank_white, blank_teal = color_bounds(blank, bp.WHITE), color_bounds(blank, bp.TEAL)
+        comparison_white, comparison_teal = color_bounds(comparison, bp.WHITE), color_bounds(comparison, bp.TEAL)
+        self.assertLess(blank_teal[0] - blank_white[1], comparison_teal[0] - comparison_white[1])
+
+    def test_scaffold_has_clean_title_caption_contract_and_posting_copy(self):
+        from reel.rendering import _caption, create_run
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / ".work"
+            with mock.patch("reel.runs.WORK_DIR", work):
+                brief = create_run("Database Joins Explained", duration=20)
+                run = work / brief["run_id"]
+                module_source = (run / "scene.py").read_text(encoding="utf-8")
+                self.assertIn("'title_left': 'DATABASE'", module_source)
+                self.assertIn("'title_right': 'JOINS'", module_source)
+                self.assertIn("'title_connector': ''", module_source)
+                self.assertNotIn("'title_right': 'BLUEPRINT'", module_source)
+                self.assertTrue(brief["constraints"]["burned_in_captions"])
+        self.assertTrue(_caption("Database Joins").startswith("Database Joins explained "))
+        self.assertTrue(_caption("Database Joins Explained").startswith("Database Joins Explained as "))
+        self.assertNotIn("Explained explained", _caption("Database Joins Explained"))
 
     def test_legacy_frames_are_remapped_to_exact_target_count(self):
         from PIL import Image

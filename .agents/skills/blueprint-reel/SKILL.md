@@ -17,7 +17,7 @@ existing generator before authoring a scene.
   resulting `.work/<run-id>/scene.py`, probe, then render.
 
 SceneV2 is deliberately constrained: the engine owns canvas, header, telemetry,
-caption-free lower breathing room, footer, branding, 30/60 beat boundaries, audio synchronization,
+synchronized lower story-caption pill, footer, branding, 30/60 beat boundaries, audio synchronization,
 multiprocessing, FFmpeg, FFprobe, and atomic publication. Scene code receives a
 clipped stage surface plus `FrameContext` with normalized progress, beat, beat
 progress, stage bounds, and locked theme tokens.
@@ -38,7 +38,11 @@ must never be presented as a bespoke flagship treatment.
   `mechanical`, `storage`, `security`, `compute`, or `protocol`) and normalized
   events. Use only `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
   `processing`, `impact`, or `success`, with at least one cue in every beat.
-- Frames contain no burned-in posting captions; keep the lower band as breathing room.
+- Every `SCENE` defines exactly three non-empty story captions for the 0–30%,
+  30–60%, and 60–100% beats. These are burned into the lower glass pill; posting
+  copy remains separate in `caption.txt`.
+- Headlines use `title_left` and `title_right`. `title_connector` defaults to blank;
+  set it to `vs` only for a genuine comparison.
 - Default 720×1280 at 30fps for 20 seconds. Choose 15s for a simple mechanism, 20s
   for a standard three-beat explanation, 25s for a multi-stage comparison, and 30s
   for a dense protocol. Values outside 15–30 seconds are invalid.
