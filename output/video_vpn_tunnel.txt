@@ -1,0 +1,12 @@
+VPN explained: what your WiFi can actually see vs what it can't.
+
+HTTPS hides what you send, NOT where you send it.
+
+Every request has a destination IP on the outside, and your WiFi router and ISP read it to forward packets. That's why your network logs paypal.com and github.com even when SSL encrypted.
+
+A VPN wraps the whole request inside a second outer packet addressed to the VPN server. Everything on your local path sees only the VPN server IP.
+
+Save this for the next time someone asks how a VPN actually works.
+Follow @buildebugship for cybersecurity and networking explained visually.
+
+#vpn #networking #cybersecurity #systemdesign #privacy #devops

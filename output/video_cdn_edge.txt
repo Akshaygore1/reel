@@ -1,0 +1,22 @@
+CDN vs Central Origin explained: why your global users experience 320ms ping and how Edge PoPs drop it to 8ms.
+
+Without a Content Delivery Network (CDN), every player and browser across Tokyo, London, and Sydney must send HTTP requests across 12,000 km of undersea fiber cables directly to a single US-East origin server.
+
+Under peak traffic:
+1. Cross-ocean Round-Trip Time (RTT) averages 320ms - 350ms.
+2. The single origin server CPU spikes to 98% under heavy media streaming load.
+3. Packet loss surges and global users suffer severe buffering.
+
+The CDN solution:
+Deploy a worldwide network of Edge Points of Presence (PoPs) powered by Anycast DNS geo-routing.
+
+When a user in Tokyo requests a 4K video or game texture:
+1. Anycast automatically routes the request to the closest Edge PoP in Tokyo (< 15km away).
+2. NVMe SSD & RAM edge caches serve static assets instantly with a 98.4% Cache Hit Ratio.
+3. Response latency plummets from 320ms to 8ms.
+4. Origin server load drops by 98%, protecting your core database and APIs.
+
+Which CDN provider powers your production infrastructure: Cloudflare, AWS CloudFront, Fastly, or Akamai?
+Follow @buildebugship for distributed systems, networking, and backend architecture explained visually.
+
+#cdn #systemdesign #networking #backend #webdev #cloud #devops #performance #softwareengineering

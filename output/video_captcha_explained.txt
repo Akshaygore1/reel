@@ -1,0 +1,17 @@
+How CAPTCHA works: why clicking “I’m not a robot” is only the beginning.
+
+A checkbox alone cannot prove that someone is human—a bot can click it too. Modern CAPTCHA systems treat the interaction as one input to a broader, server-side risk decision.
+
+In this simulation:
+1. A human cursor pauses, changes direction, and clicks with varied timing.
+2. A bot jumps directly to the target in 8ms and repeats the same action.
+3. The risk engine combines interaction behavior with browser, network, and request context.
+
+Low-risk traffic receives a signed pass token. Uncertain traffic gets an extra image or interaction challenge. Clearly abusive traffic can be blocked or rate-limited.
+
+The exact signals and thresholds vary by CAPTCHA provider, and the numbers shown here are illustrative. CAPTCHA raises the cost of automation—it does not prove humanity from one click.
+
+What signal would expose a bot fastest: timing, repetition, or request context?
+Follow @buildebugship for cybersecurity and backend systems explained visually.
+
+#captcha #cybersecurity #websecurity #backend #systemdesign #automation #webdev #security

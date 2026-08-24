@@ -1,0 +1,17 @@
+CI/CD explained: why shipping code manually at 2 AM is high-risk roulette.
+
+In modern engineering, you don't SSH into production servers to pull code or restart containers manually.
+
+Continuous Integration (CI):
+Every commit automatically triggers static linting, AST type checks, container builds, and 400+ unit/integration test suites in isolated runners. If one test breaks or a CVE vulnerability is found, the CI gate halts the pipeline immediately—blocking bad code before it ever touches production.
+
+Continuous Delivery (CD):
+Once tests pass, an immutable signed artifact (Docker image) is stored. CD engages an automated Canary / Blue-Green rollout:
+1. Route 10% traffic to Green pods.
+2. Monitor 200 OK pings and latency.
+3. Automatically promote to 100% traffic with zero downtime and instant rollback capabilities.
+
+How does your team handle deployment pipelines—GitHub Actions, GitLab CI, or ArgoCD?
+Follow @buildebugship for DevOps internals and backend architecture explained visually.
+
+#cicd #devops #systemdesign #cloud #softwareengineering #kubernetes #docker #backend

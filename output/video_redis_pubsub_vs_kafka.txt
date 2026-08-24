@@ -1,0 +1,18 @@
+Redis Pub/Sub vs Kafka: fast live fan-out versus a durable, replayable event log.
+
+When every consumer is online, both systems can deliver an event immediately.
+
+Redis Pub/Sub broadcasts each message only to subscribers that are connected at that moment. It does not persist messages, track consumer offsets, or replay missed events. If a subscriber disconnects when event #1042 is published, that subscriber never receives it.
+
+Kafka appends event #1042 to a partitioned log. The consumer's committed offset remains at #1041, so Kafka records a lag of one while the consumer is offline. When it reconnects, it resumes from offset #1042 and processes the retained event.
+
+Choose Redis Pub/Sub for transient live signals where occasional loss is acceptable: presence, live UI updates, or disposable notifications.
+
+Choose Kafka when events must survive restarts, be replayed, feed multiple independent consumer groups, or power durable workflows such as orders, payments, audit pipelines, and CDC.
+
+Redis Pub/Sub is a broadcast channel. Kafka is a retained event log. They solve different problems.
+
+Which one is carrying your production events today?
+Follow @buildebugship for backend architecture and distributed systems explained visually.
+
+#redis #kafka #pubsub #eventdriven #systemdesign #backend #distributedsystems #microservices

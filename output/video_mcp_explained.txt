@@ -1,0 +1,18 @@
+MCP explained with a real example: how an AI assistant connects to live tools without a custom integration for every API.
+
+Imagine a travel assistant answering: “Should I pack an umbrella for Mumbai?” The model can reason, but its training data cannot tell it the live forecast.
+
+Without a shared protocol, the app must rebuild authentication, schemas, discovery, retries, and error handling for every data source.
+
+Model Context Protocol (MCP) standardizes that connection. The AI host runs an MCP client, discovers capabilities exposed by an MCP server, calls a tool such as:
+
+get_forecast(city="Mumbai")
+
+The weather server executes the real API call and returns structured context: 22°C with rain. The model can now use that result in its answer.
+
+MCP does not make the model omniscient, and the server still needs permissions and security controls. It gives AI applications a consistent way to discover and use tools, resources, and prompts.
+
+What would you connect to an AI assistant first—GitHub, your database, or internal docs?
+Follow @buildebugship for AI architecture and backend systems explained visually.
+
+#mcp #modelcontextprotocol #aiagents #systemdesign #backend #llm #developer

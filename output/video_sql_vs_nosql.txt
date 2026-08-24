@@ -1,0 +1,14 @@
+SQL vs NoSQL explained: why the JOIN decides whether you scale up or scale out.
+
+In SQL (PostgreSQL), orders live in their own table. Every user read is a JOIN: users joined to orders, executed on ONE node. At 12k req/s that's fine — 0.4ms.
+
+Then traffic spikes ×10. 412 queries pile onto the same single JOIN queue, P99 latency hits 850ms, and timeouts roll in. You can scale UP (4× the CPU) but a JOIN cannot be split across machines — the data has to live together to be joined.
+
+The NoSQL answer (MongoDB / DynamoDB): denormalize. Embed the orders array inside the user document. One document = one read, zero JOINs. No JOIN means the data can SHARD: hash(user_id) routes each read to exactly 1 of 3 nodes. 0.12ms reads at 150k req/s.
+
+The tradeoff: NoSQL gives up cross-document JOINs and strong cross-row ACID transactions. That's why most companies run BOTH — SQL for money and relations, NoSQL for scale-out reads.
+
+What do you reach for first — Postgres or Mongo?
+Follow @buildebugship for database internals and system design explained visually.
+
+#sql #nosql #mongodb #postgresql #systemdesign #database #backend #webdev

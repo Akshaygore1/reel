@@ -1,0 +1,12 @@
+Cron jobs explained: what * * * * * actually does under the hood.
+
+A cron expression is 5 mechanical sliding gates: Minute, Hour, Day of Month, Month, and Day of Week.
+
+Every 60 seconds, the clock daemon advances. When all 5 gates align at midnight (0 0 * * *), the trapdoor clicks open and fires your job trigger.
+
+Simple, deterministic, and running the backbone of Linux infrastructure for 45 years.
+
+What is your most critical cron job?
+Follow @buildebugship for backend systems and Linux architecture explained visually.
+
+#linux #devops #cron #backend #softwareengineering #sysadmin

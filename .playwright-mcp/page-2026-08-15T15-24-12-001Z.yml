@@ -1,0 +1,71 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: 9:16 ENGINE
+      - heading "System Design Reels Studio" [level=1] [ref=e6]
+    - generic [ref=e7]:
+      - button "🎬 Video Showcase" [ref=e8] [cursor=pointer]
+      - button "⚡ Interactive Sandbox" [ref=e9] [cursor=pointer]
+      - button "🛠️ Custom Generator" [ref=e10] [cursor=pointer]
+  - main [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - button "01 SQL Injection 3D Server Racks & Breach Alarm" [ref=e15] [cursor=pointer]:
+            - generic [ref=e16]: "01"
+            - generic [ref=e17]:
+              - generic [ref=e18]: SQL Injection
+              - generic [ref=e19]: 3D Server Racks & Breach Alarm
+          - button "02 Redis vs DB Disk Silicon RAM vs Spinning Platter" [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: "02"
+            - generic [ref=e22]:
+              - generic [ref=e23]: Redis vs DB Disk
+              - generic [ref=e24]: Silicon RAM vs Spinning Platter
+          - button "03 Autoscaling Pachinko Drops & Crane Scaler" [ref=e25] [cursor=pointer]:
+            - generic [ref=e26]: "03"
+            - generic [ref=e27]:
+              - generic [ref=e28]: Autoscaling
+              - generic [ref=e29]: Pachinko Drops & Crane Scaler
+          - button "04 Cron Jobs (* * * * *) 24-Hr Dial & 5 Sliding Gates" [ref=e30] [cursor=pointer]:
+            - generic [ref=e31]: "04"
+            - generic [ref=e32]:
+              - generic [ref=e33]: Cron Jobs (* * * * *)
+              - generic [ref=e34]: 24-Hr Dial & 5 Sliding Gates
+        - generic [ref=e39]:
+          - generic [ref=e40] [cursor=pointer]
+          - generic [ref=e41]:
+            - button "⏸ Pause" [ref=e42] [cursor=pointer]
+            - button "⏮ Restart" [ref=e43] [cursor=pointer]
+            - button "1.0x" [ref=e44] [cursor=pointer]
+            - button "🔇 Muted" [ref=e45] [cursor=pointer]
+            - link "⬇ Download MP4" [ref=e46] [cursor=pointer]:
+              - /url: /videos/video_flagship_sql_injection.mp4
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: "ARCHETYPE: 3D SERVER RACKS & BREACH ALARM"
+          - heading "SQL Injection (How 1=1 Breaches the Database)" [level=2] [ref=e51]
+          - paragraph [ref=e52]: How one rogue quote bypasses authentication and dumps 100,000 user records.
+        - generic [ref=e53]:
+          - heading "⏱ 3-Beat Narrative Arc" [level=3] [ref=e54]
+          - generic [ref=e55]:
+            - generic [ref=e56]: 0s - 3s
+            - generic [ref=e57]:
+              - strong [ref=e58]: "Input Field Typing:"
+              - text: User logs in normally with username. Parser generates clean query.
+          - generic [ref=e59]:
+            - generic [ref=e60]: 3s - 5.5s
+            - generic [ref=e61]:
+              - strong [ref=e62]: "Malicious Payload:"
+              - text: Hacker types
+              - code [ref=e63]: admin' OR 1=1 --
+              - text: . Raw string concat merges code with data.
+          - generic [ref=e64]:
+            - generic [ref=e65]: 5.5s - 10s
+            - generic [ref=e66]:
+              - strong [ref=e67]: "Alarm Trip & Breach:"
+              - text: 1=1 evaluates to TRUE. Auth bypasses, alarm trips (RED), and database exfiltrates 100k rows.
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - heading "📝 Instagram Caption & Hashtags" [level=3] [ref=e70]
+            - button "📋 Copy Caption" [ref=e71] [cursor=pointer]
+          - generic [ref=e72]: "SQL Injection explained: how one rogue quote bypasses authentication entirely. When you concatenate raw user strings into SQL queries: $sql = \"SELECT * FROM users WHERE user = '\" + input + \"'\"; Entering: admin' OR 1=1 -- turns the WHERE clause into: WHERE user = 'admin' OR 1=1 (which is always TRUE). The rest of the query is commented out with --. The database ignores the password and dumps all 100,000 user records. The fix: Prepared Statements. Input is parameterized as data, never parsed as executable code. Are you using parameterized queries across all your microservices? Follow for cybersecurity architecture and backend internals explained visually. #security #sqlinjection #cybersecurity #backend #webdev #database #systemdesign"

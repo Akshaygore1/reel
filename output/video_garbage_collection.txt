@@ -1,0 +1,16 @@
+Garbage Collection explained: how a managed runtime turns a 96% full heap back into reusable memory.
+
+Your code allocates objects into a managed heap. When the last reference to an object disappears, the bytes do not vanish immediately — the object becomes unreachable and waits for the collector.
+
+In this 64MB heap, allocation pressure reaches 96% and triggers a 180ms stop-the-world full collection.
+
+The tracing collector starts from GC roots such as stack frames, static fields, and native handles. It marks every object reachable through the reference graph, sweeps everything unmarked, then compacts survivors to remove fragmentation.
+
+Result: about 37MB reclaimed, heap usage falls to 38%, and allocation resumes after a 12ms optimized pause.
+
+Important: GC reclaims managed memory, not external resources such as files, sockets, or database connections. Close those explicitly. Collector tuning also trades pause time against throughput and memory overhead.
+
+Which runtime collector do you use in production — G1, ZGC, Go GC, or V8 Orinoco?
+Follow @buildebugship for runtime internals and system design explained visually.
+
+#garbagecollection #jvm #golang #javascript #backend #performance #systemdesign #memory

@@ -1,0 +1,25 @@
+Authentication (AuthN) vs Authorization (AuthZ) explained: why passing AuthN doesn't mean you have access.
+
+Think of your API like an arcade pinball machine with two distinct security chambers:
+
+1. Authentication (AuthN) = "WHO ARE YOU?"
+The plunger launches your request into the top chamber. JWT signature verification, OAuth2 tokens, and FIDO2 Passkeys bounce against the bumpers to verify identity.
+Result: 200 OK — Identity confirmed (User ID #42).
+
+2. Authorization (AuthZ) = "WHAT ARE YOU ALLOWED TO DO?"
+User #42 attempts to hit the Admin gate to DELETE /database.
+Even though AuthN passed 200 OK, the RBAC policy filter checks roles & scopes. User #42 only has ROLE: VIEWER.
+Result: 403 FORBIDDEN! The security flipper blocks access.
+
+3. RBAC Resolution:
+The policy engine routes Viewer through the READ lane — correct scope, correct access. 200 OK.
+
+The Golden Rule:
+• AuthN verifies Identity (401 if invalid token/signature).
+• AuthZ verifies Permissions (403 if role lacks the required scope).
+Always enforce both layers with RBAC or ABAC in production!
+
+How do you handle AuthZ in your microservices — Casbin, OPA/Rego, Keycloak, or custom middleware?
+Follow @buildebugship for cybersecurity architecture and backend internals explained visually.
+
+#security #authn #authz #cybersecurity #backend #jwt #oauth #rbac #systemdesign

@@ -1,0 +1,16 @@
+SQL Injection explained: how one rogue quote bypasses authentication entirely.
+
+When you concatenate raw user strings into SQL queries:
+$sql = "SELECT * FROM users WHERE user = '" + input + "'";
+
+Entering: admin' OR 1=1 --
+turns the WHERE clause into: WHERE user = 'admin' OR 1=1 (which is always TRUE). The rest of the query is commented out with --.
+
+The database ignores the password and dumps all user records.
+
+The fix: Prepared Statements (Parameterized Queries). Input is parameterized as pure data, never parsed as executable SQL code.
+
+Are you using parameterized queries across all your microservices?
+Follow @buildebugship for cybersecurity architecture and backend internals explained visually.
+
+#security #sqlinjection #cybersecurity #backend #webdev #database #systemdesign

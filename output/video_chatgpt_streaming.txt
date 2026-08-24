@@ -1,0 +1,22 @@
+How ChatGPT streams responses in real-time under the hood.
+
+ChatGPT doesn't write full sentences at once. Its Transformer model generates answers autoregressively: predicting ONE token at a time.
+
+If ChatGPT waited for all 500 tokens before sending the response, you would stare at a frozen loading spinner for 15 seconds.
+
+Instead, the client sends:
+POST /v1/chat/completions { "stream": true }
+
+The server responds with:
+Content-Type: text/event-stream
+Transfer-Encoding: chunked
+
+As the GPU calculates each token, the server immediately flushes:
+data: {"delta": {"content": "word"}}
+
+The client reads the stream chunk and paints words onto your screen in 38ms. When complete, the server sends data: [DONE].
+
+Are you using Server-Sent Events (SSE) or WebSockets in your AI apps?
+Follow @buildebugship for AI architecture and system design explained visually.
+
+#chatgpt #openai #ai #systemdesign #backend #sse #webdev #softwareengineering
