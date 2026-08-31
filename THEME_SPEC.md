@@ -6,7 +6,7 @@
 - **Total Duration**: concept-driven, required range `15.0–30.0 seconds`; `20.0 seconds` by default
 - **Total Frames**: actual duration × 30fps
 - **Video Codec**: `H.264 (libx264)`, Pixel Format `yuv420p`, CRF `18`, Preset `fast`
-- **Audio Codec**: `AAC @ 192kbps`, 44.1kHz Mono
+- **Audio Codec**: `AAC @ 192kbps`, 48kHz Mono
 - **File Container**: `.mp4` with `+faststart` web optimization
 
 ---

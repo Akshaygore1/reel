@@ -8,7 +8,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import wave
 from unittest import mock
+
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -219,6 +222,71 @@ class AudioContractTests(unittest.TestCase):
             self.assertNotEqual(hashes[0], hashes[2])
             self.assertNotEqual(hashes[0], hashes[3])
             self.assertEqual(first["sample_positions"], [round(at * SAMPLE_RATE) for at in (.12, .34, .64)])
+
+            with wave.open(str(paths[0]), "rb") as rendered:
+                self.assertEqual(rendered.getframerate(), 48_000)
+                self.assertEqual(rendered.getnchannels(), 1)
+                self.assertEqual(rendered.getsampwidth(), 2)
+
+    def test_all_public_cues_are_audible_and_match_generator_gestures(self):
+        from reel.audio import (CUE_GESTURES, PROFILES, SAMPLE_RATE, _add,
+                                _cue_signal, _generator_signal)
+        profile, seed, intensity = PROFILES["network"], 123456, 0.0
+        expected_gestures = {
+            "blip": ((0., "accent"),), "packet": ((0., "tick"),),
+            "tick": ((0., "tick"),),
+            "queue": ((0., "tick"), (.1, "tick"), (.2, "tick"), (.3, "tick")),
+            "alarm": ((0., "thud"), (.18, "whoosh")),
+            "latch": ((0., "tick"), (.04, "thud")),
+            "sweep": ((0., "riser"),),
+            "processing": tuple((i * .1, "tick") for i in range(7)),
+            "impact": ((0., "thud"),), "success": ((0., "stinger"),),
+        }
+        self.assertEqual(CUE_GESTURES, expected_gestures)
+        for kind, gesture in expected_gestures.items():
+            with self.subTest(kind=kind):
+                actual = _cue_signal(kind, intensity, profile, seed)
+                expected = np.zeros(len(actual))
+                for index, (offset, generator) in enumerate(gesture):
+                    component_seed = (seed + index * 0x9e3779b9) & 0xffffffff
+                    _add(expected, round(offset * SAMPLE_RATE),
+                         _generator_signal(generator, .25, component_seed))
+                self.assertTrue(np.any(actual))
+                np.testing.assert_array_equal(actual, expected)
+
+    def test_generator_attacks_clipping_and_payoff_strength(self):
+        from reel.audio import (ATTACK_SECONDS, GENERATOR_LEVELS,
+                                SOFT_CLIP_CEILING, _generator_signal, soft_clip)
+        frame, rms_window, onset_threshold = 1 / 30, round(.02 * 48_000), .04
+        for kind, attack in ATTACK_SECONDS.items():
+            with self.subTest(kind=kind):
+                signal = _generator_signal(kind, 1., 42)
+                bins = [np.sqrt(np.mean(signal[start:start+rms_window] ** 2))
+                        for start in range(0, len(signal), rms_window)]
+                measured = next(index * .02 for index, rms in enumerate(bins)
+                                if rms >= onset_threshold)
+                self.assertLessEqual(abs(measured - attack), frame)
+        clipped = soft_clip(np.array([-100., -1., 0., 1., 100.]))
+        self.assertLessEqual(float(np.max(np.abs(clipped))), SOFT_CLIP_CEILING)
+        peaks = {kind: float(np.max(np.abs(_generator_signal(kind, 1., 42))))
+                 for kind in GENERATOR_LEVELS}
+        self.assertEqual(max(peaks, key=peaks.get), "stinger")
+
+    def test_rendered_pcm_obeys_soft_clip_ceiling(self):
+        from reel.audio import SOFT_CLIP_CEILING, build_scene_soundtrack
+        crowded = {"profile": "network", "events": [
+            {"at": .1, "kind": "success", "intensity": 1.},
+            {"at": .1, "kind": "success", "intensity": 1.},
+            {"at": .4, "kind": "alarm", "intensity": 1.},
+            {"at": .7, "kind": "success", "intensity": 1.},
+        ]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ceiling.wav"
+            build_scene_soundtrack(path, "Ceiling", 1., crowded)
+            with wave.open(str(path), "rb") as rendered:
+                pcm = np.frombuffer(rendered.readframes(rendered.getnframes()), dtype="<i2")
+            self.assertLessEqual(int(np.max(np.abs(pcm.astype(np.int32)))),
+                                 round(SOFT_CLIP_CEILING * 32767))
 
     def test_invalid_plan_fails_before_frame_generation(self):
         from reel.rendering import create_run, render_run

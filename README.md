@@ -2,7 +2,7 @@
 
 A local, cross-platform Python harness for 9:16 system-design reels. Pillow renders
 blueprint visuals with scene-synchronized story captions, NumPy synthesizes
-scene-synchronized zero-voiceover game SFX and ambient music,
+scene-synchronized zero-voiceover calibrated procedural SFX and ambient music,
 and FFmpeg compiles verified H.264/AAC videos.
 
 ## Setup
@@ -66,6 +66,12 @@ Cue kinds are `blip`, `packet`, `tick`, `queue`, `alarm`, `latch`, `sweep`,
 incomplete plans fail before frames render. The three short story captions are
 burned into the lower glass pill, while separate posting copy ships in the populated
 `caption.txt`.
+
+The soundtrack uses six deterministic generators (`tick`, `thud`, `whoosh`,
+`accent`, `riser`, and `stinger`) behind the existing cue vocabulary. Calibrated
+levels and attack timing, profile-relative pitch, additive mixing, and a `tanh`
+soft ceiling preserve the locked sound grammar. WAV intermediates are 48 kHz mono
+16-bit PCM; publication remains AAC with zero voiceover.
 
 Successful runs are immutable kits under `output/<run-id>/` containing `video.mp4`,
 `caption.txt`, `manifest.json`, `poster.jpg`, `brief.json`, and `scene.py`. Heavy

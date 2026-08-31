@@ -10,20 +10,33 @@ import wave
 
 import numpy as np
 
-SAMPLE_RATE = 44_100
+SAMPLE_RATE = 48_000
+REFERENCE_ROOT = 146.83
+SOFT_CLIP_CEILING = .89
 PROFILES = {
-    # timbre = nonlinear drive, differentiated brightness, deterministic noise.
-    "network": {"tempo_bpm": 108, "root": 146.83, "color": (1.0, 1.25, 1.50), "timbre": (1.20, .08, .002)},
-    "mechanical": {"tempo_bpm": 92, "root": 110.00, "color": (1.0, 1.50, 2.00), "timbre": (1.85, .18, .006)},
-    "storage": {"tempo_bpm": 84, "root": 98.00, "color": (1.0, 1.20, 1.50), "timbre": (1.50, .05, .003)},
-    "security": {"tempo_bpm": 96, "root": 123.47, "color": (1.0, 1.19, 1.50), "timbre": (2.20, .10, .004)},
-    "compute": {"tempo_bpm": 116, "root": 164.81, "color": (1.0, 1.25, 1.498), "timbre": (1.30, .14, .002)},
-    "protocol": {"tempo_bpm": 100, "root": 130.81, "color": (1.0, 1.26, 1.50), "timbre": (1.10, .06, .001)},
+    "network": {"tempo_bpm": 108, "root": 146.83, "color": (1., 1.25, 1.5)},
+    "mechanical": {"tempo_bpm": 92, "root": 110., "color": (1., 1.5, 2.)},
+    "storage": {"tempo_bpm": 84, "root": 98., "color": (1., 1.2, 1.5)},
+    "security": {"tempo_bpm": 96, "root": 123.47, "color": (1., 1.19, 1.5)},
+    "compute": {"tempo_bpm": 116, "root": 164.81, "color": (1., 1.25, 1.498)},
+    "protocol": {"tempo_bpm": 100, "root": 130.81, "color": (1., 1.26, 1.5)},
 }
-CUE_KINDS = frozenset({
-    "blip", "packet", "tick", "queue", "alarm", "latch", "sweep",
-    "processing", "impact", "success",
-})
+CUE_KINDS = frozenset({"blip", "packet", "tick", "queue", "alarm", "latch",
+                       "sweep", "processing", "impact", "success"})
+GENERATOR_LEVELS = {"tick": 1.517, "thud": .503, "whoosh": .71,
+                    "accent": 1.44, "riser": 1.123, "stinger": .8}
+ATTACK_SECONDS = {"tick": 0., "thud": 0., "whoosh": 0., "accent": 0.,
+                  "riser": .04, "stinger": 0.}
+GENERATOR_DURATIONS = {"tick": .04, "thud": .18, "whoosh": .28,
+                       "accent": .14, "riser": .15, "stinger": .22}
+CUE_GESTURES = {
+    "blip": ((0., "accent"),), "packet": ((0., "tick"),), "tick": ((0., "tick"),),
+    "queue": ((0., "tick"), (.1, "tick"), (.2, "tick"), (.3, "tick")),
+    "alarm": ((0., "thud"), (.18, "whoosh")),
+    "latch": ((0., "tick"), (.04, "thud")), "sweep": ((0., "riser"),),
+    "processing": tuple((i * .1, "tick") for i in range(7)),
+    "impact": ((0., "thud"),), "success": ((0., "stinger"),),
+}
 
 
 @dataclass(frozen=True)
@@ -33,11 +46,8 @@ class AudioPlan:
     events: tuple[dict, ...]
 
     def canonical(self) -> dict:
-        return {
-            "profile": self.profile,
-            "tempo_bpm": self.tempo_bpm,
-            "events": [dict(event) for event in self.events],
-        }
+        return {"profile": self.profile, "tempo_bpm": self.tempo_bpm,
+                "events": [dict(event) for event in self.events]}
 
 
 def _beat_for(at: float) -> int:
@@ -83,128 +93,120 @@ def validate_audio_plan(value: object) -> AudioPlan:
 def stable_audio_seed(topic: str, plan: AudioPlan | dict) -> int:
     normalized = plan if isinstance(plan, AudioPlan) else validate_audio_plan(plan)
     payload = {"topic": topic, "audio": normalized.canonical()}
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).digest()
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).digest()
     return int.from_bytes(digest[:8], "big")
 
 
+class _XorShift32:
+    def __init__(self, seed: int): self.state = seed & 0xffffffff
+
+    def sample(self) -> float:
+        value = self.state
+        value ^= (value << 13) & 0xffffffff; value ^= value >> 17
+        value ^= (value << 5) & 0xffffffff; self.state = value & 0xffffffff
+        return (self.state / 0xffffffff) * 2 - 1
+
+
+def _event_seed(plan_seed: int, sample_position: int, event_index: int) -> int:
+    payload = (plan_seed.to_bytes(8, "big") + sample_position.to_bytes(8, "big", signed=True)
+               + event_index.to_bytes(8, "big"))
+    return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
+
+
 def _add(samples: np.ndarray, start: int, signal: np.ndarray) -> None:
-    if start >= len(samples) or not len(signal):
-        return
-    source_start = max(0, -start)
-    destination_start = max(0, start)
+    if start >= len(samples) or not len(signal): return
+    source_start, destination_start = max(0, -start), max(0, start)
     count = min(len(signal) - source_start, len(samples) - destination_start)
     if count > 0:
         samples[destination_start:destination_start + count] += signal[source_start:source_start + count]
 
 
-def _tone(duration: float, frequency: np.ndarray | float, amplitude: float, decay: float = 5.0) -> np.ndarray:
-    count = max(1, round(duration * SAMPLE_RATE))
+def _generator_signal(kind: str, gain: float, seed: int, pitch_scale: float = 1.) -> np.ndarray:
+    """Render one calibrated reference generator in isolation."""
+    count = round(GENERATOR_DURATIONS[kind] * SAMPLE_RATE)
     t = np.arange(count, dtype=np.float64) / SAMPLE_RATE
-    phase = 2 * np.pi * (frequency * t if np.isscalar(frequency) else np.cumsum(frequency) / SAMPLE_RATE)
-    envelope = np.minimum(1.0, t / .008) * np.exp(-decay * t / max(duration, .001))
-    return np.sin(phase) * envelope * amplitude
-
-
-def _apply_profile_timbre(signal: np.ndarray, profile: dict, rng: np.random.Generator) -> np.ndarray:
-    """Color every cue with the selected profile's deterministic SFX character."""
-    drive, brightness, noise = profile["timbre"]
-    colored = np.tanh(signal * drive) / drive
-    differentiated = np.diff(signal, prepend=signal[0])
-    envelope = np.sin(np.linspace(0, np.pi, len(signal))) if len(signal) else signal
-    return colored + differentiated * brightness + rng.normal(0, noise, len(signal)) * envelope
-
-
-def _cue_signal(kind: str, intensity: float, profile: dict, rng: np.random.Generator) -> np.ndarray:
-    root = profile["root"] * rng.uniform(.97, 1.03)
-    amplitude = .07 + .21 * intensity
-    if kind == "blip":
-        signal = _tone(.09, root * rng.uniform(5.5, 7.5), amplitude, 8)
-    if kind == "packet":
-        count = round(.16 * SAMPLE_RATE); frequencies = np.linspace(root * 3.2, root * 5.0, count)
-        signal = _tone(.16, frequencies, amplitude, 6)
+    sine = lambda hz: np.sin(2 * np.pi * hz * pitch_scale * t)
     if kind == "tick":
-        signal = rng.normal(0, 1, round(.035 * SAMPLE_RATE))
-        signal = signal * np.exp(-np.arange(len(signal)) / (SAMPLE_RATE * .005)) * amplitude * .75
-    if kind == "queue":
-        signal = np.zeros(round(.55 * SAMPLE_RATE))
-        for offset in (0, .13, .26, .39):
-            _add(signal, round(offset * SAMPLE_RATE), _tone(.12, root * 1.5, amplitude * .65, 7))
-    if kind == "alarm":
-        count = round(.8 * SAMPLE_RATE); frequencies = np.linspace(root * 2.8, root * .8, count)
-        signal = _tone(.8, frequencies, amplitude * 1.2, 2.8)
-        signal *= .55 + .45 * np.sin(2 * np.pi * 18 * np.arange(count) / SAMPLE_RATE)
-    if kind == "latch":
-        signal = rng.normal(0, 1, round(.2 * SAMPLE_RATE))
-        signal *= np.exp(-np.arange(len(signal)) / (SAMPLE_RATE * .012)) * amplitude * .6
-        _add(signal, round(.045 * SAMPLE_RATE), _tone(.13, root * .8, amplitude, 7))
-    if kind == "sweep":
-        count = round(.65 * SAMPLE_RATE); frequencies = np.geomspace(root, root * 10, count)
-        signal = _tone(.65, frequencies, amplitude * .75, 2)
-        signal += rng.normal(0, amplitude * .08, count) * np.sin(np.linspace(0, np.pi, count))
-    if kind == "processing":
-        signal = np.zeros(round(.75 * SAMPLE_RATE))
-        for offset in np.arange(0, .7, .1):
-            _add(signal, round(offset * SAMPLE_RATE), _tone(.075, root * rng.uniform(4, 7), amplitude * .45, 8))
-    if kind == "impact":
-        count = round(.7 * SAMPLE_RATE); frequencies = np.linspace(root, root * .32, count)
-        signal = _tone(.7, frequencies, amplitude * 1.35, 4)
-    if kind == "success":
-        signal = np.zeros(round(1.15 * SAMPLE_RATE))
-        for delay, ratio in ((0, 2), (.08, 2.5), (.16, 3)):
-            _add(signal, round(delay * SAMPLE_RATE), _tone(.95, root * ratio, amplitude * .72, 3.4))
-    return _apply_profile_timbre(signal, profile, rng)
+        rng, lp, edge = _XorShift32(seed), 0., np.empty(count)
+        for i in range(count):
+            raw = rng.sample(); lp += (raw - lp) * .35; edge[i] = (raw - lp) * .55
+        signal = (sine(2200) * .5 + sine(3300) * .18 + edge) * np.exp(-t / .008) * .5
+    elif kind == "thud":
+        hz = (78 - 34 * (t / GENERATOR_DURATIONS["thud"])) * pitch_scale
+        signal = (np.sin(2*np.pi*hz*t) * .9 + np.sin(2*np.pi*hz*2*t) * .12) * np.exp(-t/.055)
+    elif kind == "whoosh":
+        rng, lp, lp2, noise, p = (_XorShift32(seed + 7), 0., 0., np.empty(count),
+                                  t / GENERATOR_DURATIONS["whoosh"])
+        for i in range(count):
+            k = .02 + .22 * math.sin(min(1., p[i] * 1.6) * math.pi)
+            raw = rng.sample(); lp += (raw-lp)*k; lp2 += (lp-lp2)*k; noise[i] = lp2 * 3.2
+        signal = (noise + sine(120 - 60*p) * .22) * (np.minimum(1, p/.08) * np.power(1-p, 1.7))
+    elif kind == "accent":
+        signal = (sine(880)*.5 + sine(1320)*.3) * np.exp(-t/.035) * .6
+    elif kind == "riser":
+        rng, lp, noise, p = (_XorShift32(seed + 13), 0., np.empty(count),
+                             t / GENERATOR_DURATIONS["riser"])
+        for i in range(count):
+            k = .04 + .3*p[i]; lp += (rng.sample()-lp)*k; noise[i] = lp*1.6
+        signal = (noise + sine(300+900*p)*.3) * (np.power(p,1.2)*(1-np.power(p,6)))
+    elif kind == "stinger":
+        rng, lp, noise = _XorShift32(seed + 29), 0., np.empty(count)
+        for i in range(count):
+            lp += (rng.sample()-lp)*.4; noise[i] = lp
+        chord = sine(587.33)*.5 + sine(880)*.34 + sine(1174.66)*.16
+        signal = chord*np.exp(-t/.07)*.85 + noise*np.exp(-t/.006)*.9
+    else:
+        raise ValueError(f"unknown generator kind: {kind}")
+    return signal * gain * GENERATOR_LEVELS[kind]
+
+
+def _cue_signal(kind: str, intensity: float, profile: dict, seed: int) -> np.ndarray:
+    gain, scale, gesture = .25 + .75*intensity, profile["root"]/REFERENCE_ROOT, CUE_GESTURES[kind]
+    length = max(round(offset*SAMPLE_RATE) + round(GENERATOR_DURATIONS[generator]*SAMPLE_RATE)
+                 for offset, generator in gesture)
+    signal = np.zeros(length)
+    for i, (offset, generator) in enumerate(gesture):
+        component_seed = (seed + i * 0x9e3779b9) & 0xffffffff
+        _add(signal, round(offset*SAMPLE_RATE), _generator_signal(generator, gain, component_seed, scale))
+    return signal
 
 
 def _ambient(duration: float, plan: AudioPlan, rng: np.random.Generator) -> np.ndarray:
-    count = round(duration * SAMPLE_RATE)
-    samples = np.zeros(count, dtype=np.float64)
-    profile = PROFILES[plan.profile]
-    seconds_per_beat = 60 / plan.tempo_bpm
-    bar_duration = seconds_per_beat * 4
-    progression = (1.0, 1.12246, 1.25992, .94387)
+    """Retain the profile-driven lo-fi bed independently from cue RNG state."""
+    count = round(duration*SAMPLE_RATE); samples = np.zeros(count); profile = PROFILES[plan.profile]
+    beat = 60/plan.tempo_bpm; bar_duration = beat*4; progression = (1., 1.12246, 1.25992, .94387)
     detune = rng.uniform(.992, 1.008)
-    for bar, start_time in enumerate(np.arange(0, duration, bar_duration)):
-        length = min(round(bar_duration * SAMPLE_RATE), count - round(start_time * SAMPLE_RATE))
-        if length <= 0:
-            continue
-        t = np.arange(length, dtype=np.float64) / SAMPLE_RATE
-        fade = np.sin(np.linspace(0, np.pi, length)) ** .6
-        root = profile["root"] * progression[bar % len(progression)] * detune
-        chord = sum(np.sin(2 * np.pi * root * ratio * t) for ratio in profile["color"])
-        bass = np.sin(2 * np.pi * root * .25 * t)
-        _add(samples, round(start_time * SAMPLE_RATE), (chord * .013 + bass * .027) * fade)
-    tick_period = seconds_per_beat / 2
-    tick_phase = rng.uniform(0, tick_period)
-    for index, tick_time in enumerate(np.arange(tick_phase, duration, tick_period)):
-        volume = .010 if index % 2 else .018
-        tick = rng.normal(0, 1, round(.018 * SAMPLE_RATE))
-        tick *= np.exp(-np.arange(len(tick)) / (SAMPLE_RATE * .003)) * volume
-        _add(samples, round(tick_time * SAMPLE_RATE), tick)
+    for bar, start in enumerate(np.arange(0, duration, bar_duration)):
+        length = min(round(bar_duration*SAMPLE_RATE), count-round(start*SAMPLE_RATE))
+        if length <= 0: continue
+        t = np.arange(length)/SAMPLE_RATE; fade = np.sin(np.linspace(0,np.pi,length))**.6
+        root = profile["root"]*progression[bar%len(progression)]*detune
+        chord = sum(np.sin(2*np.pi*root*ratio*t) for ratio in profile["color"])
+        _add(samples, round(start*SAMPLE_RATE), (chord*.013 + np.sin(2*np.pi*root*.25*t)*.027)*fade)
+    period = beat/2
+    for i, tick_time in enumerate(np.arange(rng.uniform(0,period), duration, period)):
+        tick = rng.normal(0,1,round(.018*SAMPLE_RATE))
+        tick *= np.exp(-np.arange(len(tick))/(SAMPLE_RATE*.003)) * (.010 if i%2 else .018)
+        _add(samples, round(tick_time*SAMPLE_RATE), tick)
     return samples
 
 
+def soft_clip(samples: np.ndarray, ceiling: float = SOFT_CLIP_CEILING) -> np.ndarray:
+    return np.tanh(samples/ceiling)*ceiling
+
+
 def build_scene_soundtrack(output_wav: str | Path, topic: str, duration: float, audio: AudioPlan | dict) -> dict:
-    """Render a deterministic mono PCM cue sheet and return publication metadata."""
+    """Render deterministic 48 kHz mono 16-bit PCM and publication metadata."""
     plan = audio if isinstance(audio, AudioPlan) else validate_audio_plan(audio)
-    seed = stable_audio_seed(topic, plan)
-    rng = np.random.default_rng(seed)
-    samples = _ambient(duration, plan, rng)
-    sample_positions = []
-    profile = PROFILES[plan.profile]
-    for event in plan.events:
-        sample = round(event["at"] * duration * SAMPLE_RATE)
-        sample_positions.append(sample)
-        _add(samples, sample, _cue_signal(event["kind"], event["intensity"], profile, rng))
-    samples = np.tanh(samples * 1.35)
-    peak = max(float(np.max(np.abs(samples))), .001)
-    pcm = np.asarray(np.clip(samples * min(1.0, .94 / peak), -1, 1) * 32767, dtype="<i2")
-    path = Path(output_wav)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    seed = stable_audio_seed(topic, plan); samples = _ambient(duration, plan, np.random.default_rng(seed))
+    positions = []
+    for index, event in enumerate(plan.events):
+        sample = round(event["at"]*duration*SAMPLE_RATE); positions.append(sample)
+        _add(samples, sample, _cue_signal(event["kind"], event["intensity"], PROFILES[plan.profile],
+                                         _event_seed(seed, sample, index)))
+    pcm = np.asarray(np.rint(np.clip(soft_clip(samples), -1, 1)*32767), dtype="<i2")
+    path = Path(output_wav); path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as output:
-        output.setnchannels(1); output.setsampwidth(2); output.setframerate(SAMPLE_RATE)
-        output.writeframes(pcm.tobytes())
-    return {
-        "profile": plan.profile, "tempo_bpm": plan.tempo_bpm, "seed": seed,
-        "cue_count": len(plan.events), "sample_positions": sample_positions,
-        "voiceover": False,
-    }
+        output.setnchannels(1); output.setsampwidth(2); output.setframerate(SAMPLE_RATE); output.writeframes(pcm.tobytes())
+    return {"profile": plan.profile, "tempo_bpm": plan.tempo_bpm, "seed": seed,
+            "cue_count": len(plan.events), "sample_positions": positions, "voiceover": False}
